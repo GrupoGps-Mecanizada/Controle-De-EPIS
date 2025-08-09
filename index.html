@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de EPIs - GrupoGPS</title>
+
+    <!-- Bibliotecas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #2c3e50;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid #e9ecef;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-brand h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #0d6efd, #6f42c1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .sync-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e9ecef;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            color: #495057;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .sync-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .sync-dot.success { background: #198754; }
+        .sync-dot.error { background: #dc3545; }
+        .sync-dot.loading { background: #fd7e14; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        /* Navigation Tabs */
+        .nav-tabs {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid #e9ecef;
+            padding: 0 2rem;
+        }
+
+        .nav-tabs-container {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+        }
+
+        .nav-tab {
+            padding: 1.2rem 2rem;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            position: relative;
+            background: transparent;
+            white-space: nowrap;
+        }
+
+        .nav-tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #0d6efd, #6f42c1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .nav-tab.active {
+            color: #fff;
+            border-bottom-color: transparent;
+        }
+
+        .nav-tab.active::before {
+            opacity: 1;
+        }
+
+        .nav-tab > span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-tab:hover:not(.active) {
+            color: #0d6efd;
+            background: rgba(13, 110, 253, 0.1);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            max-width: 1800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Glass Panel */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #e9ecef;
+            background: rgba(248, 249, 250, 0.8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-weight: 700;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .panel-content {
+            padding: 1.5rem;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 1);
+            border-color: #0d6efd;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0d6efd, #6f42c1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+            font-weight: 600;
+        }
+
+        /* Forms and Controls */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.85rem;
+        }
+
+        select, input[type="date"], input[type="time"], input[type="text"], input[type="number"], input[type="search"] {
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            background: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s ease;
+            color: #2c3e50;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #0d6efd, #6f42c1);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, #6c757d, #495057);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, #198754, #20c997);
+        }
+
+        .btn.warning {
+            background: linear-gradient(135deg, #fd7e14, #ffb74d);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .data-table th {
+            background: rgba(248, 249, 250, 0.8);
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .data-table tr:hover {
+            background: rgba(13, 110, 253, 0.05);
+        }
+
+        /* Registro de Entrega */
+        .entrega-item {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .entrega-item:hover {
+            border-color: #0d6efd;
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .entrega-numero {
+            background: linear-gradient(135deg, #0d6efd, #6f42c1);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .entrega-fields {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 2fr 2fr 1fr 1fr auto;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .entrega-remove {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .entrega-remove:hover {
+            transform: scale(1.05);
+        }
+
+        /* Session Header */
+        .session-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid #e9ecef;
+        }
+
+        .session-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        /* Loading State */
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: #6c757d;
+        }
+
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 3px solid rgba(233, 236, 239, 0.3);
+            border-top: 3px solid #0d6efd;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Badge de Estoque */
+        .badge-estoque {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-estoque.critico {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+
+        .badge-estoque.baixo {
+            background: rgba(253, 126, 20, 0.2);
+            color: #fd7e14;
+        }
+
+        .badge-estoque.normal {
+            background: rgba(25, 135, 84, 0.2);
+            color: #198754;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border: 2px solid #e9ecef;
+            transform: scale(0.9);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(20px);
+        }
+
+        .modal.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #6c757d;
+            padding: 0.25rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(108, 117, 125, 0.1);
+            color: #2c3e50;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            z-index: 10000;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            animation: slideInRight 0.3s ease-out;
+            max-width: 400px;
+            backdrop-filter: blur(20px);
+        }
+
+        .notification.success { background: linear-gradient(135deg, #198754, #20c997); }
+        .notification.error { background: linear-gradient(135deg, #dc3545, #e74c3c); }
+        .notification.warning { background: linear-gradient(135deg, #fd7e14, #ffb74d); }
+        .notification.info { background: linear-gradient(135deg, #0dcaf0, #0d6efd); }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Footer */
+        .footer {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-top: 2px solid #e9ecef;
+            padding: 1.5rem;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .footer strong {
+            color: #2c3e50;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-brand h1 {
+                font-size: 1.5rem;
+            }
+
+            .main-content {
+                padding: 1rem;
+            }
+
+            .nav-tabs-container {
+                flex-wrap: wrap;
+            }
+
+            .nav-tab {
+                flex: 1;
+                text-align: center;
+                min-width: 120px;
+                padding: 1rem;
+            }
+
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .entrega-fields {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-brand">
+                    <h1>🦺 Controle de EPIs - GrupoGPS</h1>
+                </div>
+                
+                <div class="header-controls">
+                    <button class="btn" onclick="syncWithGitHub()">
+                        <span>🔄</span>
+                        Sincronizar
+                    </button>
+                    
+                    <div class="sync-indicator">
+                        <div class="sync-dot loading" id="syncDot"></div>
+                        <span id="syncStatus">Pronto</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <div class="nav-tabs-container">
+                <div class="nav-tab active" onclick="switchTab('distribuicao')">
+                    <span>📦 Distribuição</span>
+                </div>
+                <div class="nav-tab" onclick="switchTab('estoque')">
+                    <span>📊 Estoque</span>
+                </div>
+                <div class="nav-tab" onclick="switchTab('funcionarios')">
+                    <span>👷 Funcionários</span>
+                </div>
+                <div class="nav-tab" onclick="switchTab('epis')">
+                    <span>🦺 EPIs</span>
+                </div>
+                <div class="nav-tab" onclick="switchTab('historico')">
+                    <span>📋 Histórico</span>
+                </div>
+                <div class="nav-tab" onclick="switchTab('relatorios')">
+                    <span>📈 Relatórios</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Distribuição Tab -->
+            <div id="distribuicao-tab" class="tab-content active">
+                <!-- Início de Sessão -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🚀</span>
+                            Nova Sessão de Distribuição
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div class="session-header">
+                            <div class="session-info">
+                                <div class="control-group">
+                                    <label>Tipo de Operação:</label>
+                                    <select id="tipoOperacao">
+                                        <option value="entrega">Entrega de EPIs</option>
+                                        <option value="devolucao">Devolução de EPIs</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="control-group">
+                                    <label>Data:</label>
+                                    <input type="date" id="dataOperacao" value="">
+                                </div>
+                                
+                                <div class="control-group">
+                                    <label>Hora:</label>
+                                    <input type="time" id="horaOperacao" value="">
+                                </div>
+                                
+                                <div class="control-group">
+                                    <label>Responsável:</label>
+                                    <input type="text" id="responsavelOperacao" placeholder="Nome do Supervisor/Almoxarife">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                            <button class="btn success" onclick="adicionarLinhaEntrega()">
+                                <span>➕</span>
+                                Adicionar Funcionário
+                            </button>
+                            
+                            <button class="btn secondary" onclick="limparTodasLinhas()">
+                                <span>🗑️</span>
+                                Limpar Tudo
+                            </button>
+                        </div>
+                        
+                        <div id="linhasEntrega">
+                            <!-- Linhas de entrega serão adicionadas aqui -->
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                            <button class="btn success" onclick="salvarSessao()" style="padding: 1rem 3rem;">
+                                <span>💾</span>
+                                Salvar Sessão
+                            </button>
+                            
+                            <button class="btn warning" onclick="gerarRelatorioWhatsApp()" style="padding: 1rem 3rem;">
+                                <span>📱</span>
+                                Gerar para WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estoque Tab -->
+            <div id="estoque-tab" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalEPIs">0</div>
+                        <div class="stat-label">Total de EPIs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalEstoque">0</div>
+                        <div class="stat-label">Itens em Estoque</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="itensCreditos">0</div>
+                        <div class="stat-label">Itens Críticos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalEntregas">0</div>
+                        <div class="stat-label">Entregas Hoje</div>
+                    </div>
+                </div>
+                
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📊</span>
+                            Controle de Estoque
+                        </div>
+                        <button class="btn" onclick="abrirModalAjusteEstoque()">
+                            <span>🔧</span>
+                            Ajustar Estoque
+                        </button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="control-group" style="max-width: 300px; margin-bottom: 1rem;">
+                            <input type="search" id="buscarEstoque" placeholder="🔍 Buscar EPI..." onkeyup="filtrarEstoque()">
+                        </div>
+                        
+                        <table class="data-table" id="tabelaEstoque">
+                            <thead>
+                                <tr>
+                                    <th>EPI</th>
+                                    <th>Categoria</th>
+                                    <th>Quantidade</th>
+                                    <th>Mínimo</th>
+                                    <th>Status</th>
+                                    <th>Última Movimentação</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="estoqueTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                                        Nenhum item no estoque
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Funcionários Tab -->
+            <div id="funcionarios-tab" class="tab-content">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>👷</span>
+                            Cadastro de Funcionários
+                        </div>
+                        <button class="btn success" onclick="abrirModalFuncionario()">
+                            <span>➕</span>
+                            Novo Funcionário
+                        </button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="control-group" style="max-width: 300px; margin-bottom: 1rem;">
+                            <input type="search" id="buscarFuncionario" placeholder="🔍 Buscar funcionário..." onkeyup="filtrarFuncionarios()">
+                        </div>
+                        
+                        <table class="data-table" id="tabelaFuncionarios">
+                            <thead>
+                                <tr>
+                                    <th>Matrícula</th>
+                                    <th>Nome</th>
+                                    <th>Função</th>
+                                    <th>Escala</th>
+                                    <th>Turno</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="funcionariosTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                                        Nenhum funcionário cadastrado
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EPIs Tab -->
+            <div id="epis-tab" class="tab-content">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🦺</span>
+                            Cadastro de EPIs
+                        </div>
+                        <button class="btn success" onclick="abrirModalEPI()">
+                            <span>➕</span>
+                            Novo EPI
+                        </button>
+                    </div>
+                    <div class="panel-content">
+                        <div class="control-group" style="max-width: 300px; margin-bottom: 1rem;">
+                            <input type="search" id="buscarEPI" placeholder="🔍 Buscar EPI..." onkeyup="filtrarEPIs()">
+                        </div>
+                        
+                        <table class="data-table" id="tabelaEPIs">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nome</th>
+                                    <th>Categoria</th>
+                                    <th>CA</th>
+                                    <th>Validade CA</th>
+                                    <th>Vida Útil (dias)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="episTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                                        Nenhum EPI cadastrado
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Histórico Tab -->
+            <div id="historico-tab" class="tab-content">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📋</span>
+                            Histórico de Movimentações
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <button class="btn" onclick="exportarHistorico()">
+                                <span>📊</span>
+                                Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div class="controls-grid" style="margin-bottom: 1.5rem;">
+                            <div class="control-group">
+                                <label>Data Inicial:</label>
+                                <input type="date" id="dataInicialHistorico">
+                            </div>
+                            <div class="control-group">
+                                <label>Data Final:</label>
+                                <input type="date" id="dataFinalHistorico">
+                            </div>
+                            <div class="control-group">
+                                <label>Funcionário:</label>
+                                <input type="text" id="funcionarioHistorico" placeholder="Nome ou matrícula">
+                            </div>
+                            <div class="control-group">
+                                <label>EPI:</label>
+                                <input type="text" id="epiHistorico" placeholder="Nome do EPI">
+                            </div>
+                            <div class="control-group">
+                                <label>&nbsp;</label>
+                                <button class="btn" onclick="filtrarHistorico()">
+                                    <span>🔍</span>
+                                    Filtrar
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <table class="data-table" id="tabelaHistorico">
+                            <thead>
+                                <tr>
+                                    <th>Sessão</th>
+                                    <th>Data/Hora</th>
+                                    <th>Tipo</th>
+                                    <th>Funcionário</th>
+                                    <th>EPI</th>
+                                    <th>Quantidade</th>
+                                    <th>Responsável</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historicoTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                                        Nenhuma movimentação registrada
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relatórios Tab -->
+            <div id="relatorios-tab" class="tab-content">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📈</span>
+                            Relatórios e Análises
+                        </div>
+                    </div>
+                    <div class="panel-content">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalFuncionarios">0</div>
+                                <div class="stat-label">Funcionários Ativos</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="entregasHoje">0</div>
+                                <div class="stat-label">Entregas Hoje</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="devolucoesHoje">0</div>
+                                <div class="stat-label">Devoluções Hoje</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="consumoMensal">0</div>
+                                <div class="stat-label">Consumo Mensal</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 2rem;">
+                            <h3 style="margin-bottom: 1rem;">Funcionários com Maior Consumo</h3>
+                            <table class="data-table" id="tabelaConsumo">
+                                <thead>
+                                    <tr>
+                                        <th>Funcionário</th>
+                                        <th>Função</th>
+                                        <th>Total de EPIs</th>
+                                        <th>Último Mês</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consumoTableBody">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 2rem; color: #6c757d;">
+                                            Sem dados para exibir
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Desenvolvido por <strong>Warlison Abreu</strong> | © 2025 GrupoGPS - Todos os direitos reservados</p>
+        </footer>
+    </div>
+
+    <!-- Modal Funcionário -->
+    <div class="modal" id="modalFuncionario">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Cadastrar Funcionário</h3>
+                <button class="modal-close" onclick="closeModal('modalFuncionario')">&times;</button>
+            </div>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label>Matrícula:</label>
+                    <input type="text" id="matriculaFunc" placeholder="Ex: 12345">
+                </div>
+                <div class="control-group">
+                    <label>Nome Completo:</label>
+                    <input type="text" id="nomeFunc" placeholder="Nome do funcionário">
+                </div>
+                <div class="control-group">
+                    <label>Função:</label>
+                    <select id="funcaoFunc">
+                        <option value="">Selecione...</option>
+                        <option value="Motorista">Motorista</option>
+                        <option value="Operador">Operador</option>
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="Ajudante">Ajudante</option>
+                        <option value="Mecânico">Mecânico</option>
+                        <option value="Almoxarife">Almoxarife</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Escala:</label>
+                    <select id="escalaFunc">
+                        <option value="">Selecione...</option>
+                        <option value="ADM">ADM</option>
+                        <option value="16HS">16HS</option>
+                        <option value="24HS">24HS</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Turno:</label>
+                    <select id="turnoFunc">
+                        <option value="">Selecione...</option>
+                        <option value="Manhã">Manhã</option>
+                        <option value="Tarde">Tarde</option>
+                        <option value="Noite">Noite</option>
+                        <option value="Folga">Folga</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Status:</label>
+                    <select id="statusFunc">
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                        <option value="Férias">Férias</option>
+                        <option value="Afastado">Afastado</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn secondary" onclick="closeModal('modalFuncionario')">Cancelar</button>
+                <button class="btn success" onclick="salvarFuncionario()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal EPI -->
+    <div class="modal" id="modalEPI">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Cadastrar EPI</h3>
+                <button class="modal-close" onclick="closeModal('modalEPI')">&times;</button>
+            </div>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label>Código:</label>
+                    <input type="text" id="codigoEPI" placeholder="Ex: EPI001">
+                </div>
+                <div class="control-group">
+                    <label>Nome do EPI:</label>
+                    <input type="text" id="nomeEPI" placeholder="Ex: Capacete de Segurança">
+                </div>
+                <div class="control-group">
+                    <label>Categoria:</label>
+                    <select id="categoriaEPI">
+                        <option value="">Selecione...</option>
+                        <option value="Proteção da Cabeça">Proteção da Cabeça</option>
+                        <option value="Proteção Visual">Proteção Visual</option>
+                        <option value="Proteção Auditiva">Proteção Auditiva</option>
+                        <option value="Proteção Respiratória">Proteção Respiratória</option>
+                        <option value="Proteção das Mãos">Proteção das Mãos</option>
+                        <option value="Proteção dos Pés">Proteção dos Pés</option>
+                        <option value="Proteção do Corpo">Proteção do Corpo</option>
+                        <option value="Proteção Contra Quedas">Proteção Contra Quedas</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>CA (Certificado de Aprovação):</label>
+                    <input type="text" id="caEPI" placeholder="Ex: 12345">
+                </div>
+                <div class="control-group">
+                    <label>Validade do CA:</label>
+                    <input type="date" id="validadeCA">
+                </div>
+                <div class="control-group">
+                    <label>Vida Útil (dias):</label>
+                    <input type="number" id="vidaUtilEPI" placeholder="Ex: 90">
+                </div>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn secondary" onclick="closeModal('modalEPI')">Cancelar</button>
+                <button class="btn success" onclick="salvarEPI()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ajuste de Estoque -->
+    <div class="modal" id="modalAjusteEstoque">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Ajustar Estoque</h3>
+                <button class="modal-close" onclick="closeModal('modalAjusteEstoque')">&times;</button>
+            </div>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label>EPI:</label>
+                    <select id="epiAjuste">
+                        <option value="">Selecione um EPI...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Tipo de Ajuste:</label>
+                    <select id="tipoAjuste">
+                        <option value="entrada">Entrada</option>
+                        <option value="saida">Saída</option>
+                        <option value="ajuste">Ajuste de Inventário</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Quantidade:</label>
+                    <input type="number" id="quantidadeAjuste" min="1" placeholder="0">
+                </div>
+                <div class="control-group">
+                    <label>Motivo:</label>
+                    <input type="text" id="motivoAjuste" placeholder="Descreva o motivo do ajuste">
+                </div>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn secondary" onclick="closeModal('modalAjusteEstoque')">Cancelar</button>
+                <button class="btn success" onclick="salvarAjusteEstoque()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Estado Global
+        let funcionarios = [];
+        let epis = [];
+        let estoque = {};
+        let historico = [];
+        let sessaoAtual = {
+            id: null,
+            tipo: 'entrega',
+            data: '',
+            hora: '',
+            responsavel: '',
+            itens: []
+        };
+        let linhaCounter = 0;
+
+        // GitHub Configuration
+        const GITHUB_CONFIG = {
+            owner: 'GrupoGps-Mecanizada',
+            repo: 'Banco-De-Dados',
+            branch: 'main',
+            paths: {
+                funcionarios: 'EPIs/funcionarios.json',
+                epis: 'EPIs/epis.json',
+                estoque: 'EPIs/estoque.json',
+                historico: 'EPIs/historico.json'
+            }
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🦺 Sistema de Controle de EPIs Iniciado');
+            carregarDadosLocais();
+            inicializarDataHora();
+            atualizarEstatisticas();
+            
+            // Adicionar primeira linha de entrega
+            adicionarLinhaEntrega();
+            
+            // Carregar EPIs padrão se não houver nenhum
+            if (epis.length === 0) {
+                carregarEPIsPadrao();
+            }
+        });
+
+        // Carregar EPIs padrão
+        function carregarEPIsPadrao() {
+            epis = [
+                { codigo: 'EPI001', nome: 'Capacete de Segurança', categoria: 'Proteção da Cabeça', ca: '12345', validadeCA: '2026-12-31', vidaUtil: 365 },
+                { codigo: 'EPI002', nome: 'Óculos de Proteção', categoria: 'Proteção Visual', ca: '23456', validadeCA: '2026-12-31', vidaUtil: 180 },
+                { codigo: 'EPI003', nome: 'Luva PVC', categoria: 'Proteção das Mãos', ca: '34567', validadeCA: '2026-12-31', vidaUtil: 30 },
+                { codigo: 'EPI004', nome: 'Botina de Segurança', categoria: 'Proteção dos Pés', ca: '45678', validadeCA: '2026-12-31', vidaUtil: 180 },
+                { codigo: 'EPI005', nome: 'Bota PVC', categoria: 'Proteção dos Pés', ca: '56789', validadeCA: '2026-12-31', vidaUtil: 90 },
+                { codigo: 'EPI006', nome: 'Macacão PVC', categoria: 'Proteção do Corpo', ca: '67890', validadeCA: '2026-12-31', vidaUtil: 60 },
+                { codigo: 'EPI007', nome: 'Protetor Auricular', categoria: 'Proteção Auditiva', ca: '78901', validadeCA: '2026-12-31', vidaUtil: 30 },
+                { codigo: 'EPI008', nome: 'Viseira Facial', categoria: 'Proteção Visual', ca: '89012', validadeCA: '2026-12-31', vidaUtil: 90 },
+                { codigo: 'EPI009', nome: 'Respirador PFF2', categoria: 'Proteção Respiratória', ca: '90123', validadeCA: '2026-12-31', vidaUtil: 1 },
+                { codigo: 'EPI010', nome: 'Cinto de Segurança', categoria: 'Proteção Contra Quedas', ca: '01234', validadeCA: '2026-12-31', vidaUtil: 365 }
+            ];
+            
+            // Inicializar estoque com quantidade zero
+            epis.forEach(epi => {
+                if (!estoque[epi.codigo]) {
+                    estoque[epi.codigo] = {
+                        quantidade: 0,
+                        minimo: 10,
+                        ultimaMovimentacao: new Date().toISOString()
+                    };
+                }
+            });
+            
+            salvarDadosLocais();
+            atualizarTabelaEPIs();
+            atualizarTabelaEstoque();
+            showNotification('EPIs padrão carregados com sucesso!', 'info');
+        }
+
+        // Funções de Dados Locais
+        function carregarDadosLocais() {
+            try {
+                funcionarios = JSON.parse(localStorage.getItem('grupoGPS_funcionarios') || '[]');
+                epis = JSON.parse(localStorage.getItem('grupoGPS_epis') || '[]');
+                estoque = JSON.parse(localStorage.getItem('grupoGPS_estoque') || '{}');
+                historico = JSON.parse(localStorage.getItem('grupoGPS_historico') || '[]');
+            } catch (error) {
+                console.error('Erro ao carregar dados locais:', error);
+            }
+        }
+
+        function salvarDadosLocais() {
+            try {
+                localStorage.setItem('grupoGPS_funcionarios', JSON.stringify(funcionarios));
+                localStorage.setItem('grupoGPS_epis', JSON.stringify(epis));
+                localStorage.setItem('grupoGPS_estoque', JSON.stringify(estoque));
+                localStorage.setItem('grupoGPS_historico', JSON.stringify(historico));
+            } catch (error) {
+                console.error('Erro ao salvar dados locais:', error);
+            }
+        }
+
+        // Sincronização com GitHub
+        async function syncWithGitHub() {
+            updateSyncStatus('loading', 'Sincronizando...');
+            
+            try {
+                // Aqui você implementaria a sincronização real com GitHub
+                // Por enquanto, apenas simula
+                setTimeout(() => {
+                    updateSyncStatus('success', 'Sincronizado');
+                    showNotification('Dados sincronizados com sucesso!', 'success');
+                }, 2000);
+            } catch (error) {
+                updateSyncStatus('error', 'Erro na sincronização');
+                showNotification('Erro ao sincronizar: ' + error.message, 'error');
+            }
+        }
+
+        function updateSyncStatus(status, message) {
+            const dot = document.getElementById('syncDot');
+            const statusText = document.getElementById('syncStatus');
+            
+            dot.className = 'sync-dot';
+            dot.classList.add(status);
+            statusText.textContent = message;
+        }
+
+        // Funções de Distribuição
+        function adicionarLinhaEntrega() {
+            linhaCounter++;
+            const container = document.getElementById('linhasEntrega');
+            
+            const entregaItem = document.createElement('div');
+            entregaItem.className = 'entrega-item';
+            entregaItem.id = `linha-${linhaCounter}`;
+            
+            entregaItem.innerHTML = `
+                <div class="entrega-numero">${linhaCounter}</div>
+                <div class="entrega-fields">
+                    <select id="funcionario-${linhaCounter}" onchange="atualizarInfoFuncionario(${linhaCounter})">
+                        <option value="">Selecione o funcionário...</option>
+                        ${funcionarios.map(f => `<option value="${f.matricula}">${f.nome} - ${f.matricula}</option>`).join('')}
+                    </select>
+                    <select id="epi-${linhaCounter}">
+                        <option value="">Selecione o EPI...</option>
+                        ${epis.map(e => `<option value="${e.codigo}">${e.nome}</option>`).join('')}
+                    </select>
+                    <input type="number" id="quantidade-${linhaCounter}" placeholder="Qtd" min="1" value="1">
+                    <input type="text" id="observacao-${linhaCounter}" placeholder="Observação">
+                    <button class="entrega-remove" onclick="removerLinhaEntrega(${linhaCounter})">
+                        <span>🗑️</span>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(entregaItem);
+        }
+
+        function removerLinhaEntrega(id) {
+            const linha = document.getElementById(`linha-${id}`);
+            if (linha) {
+                linha.remove();
+            }
+        }
+
+        function limparTodasLinhas() {
+            if (confirm('Tem certeza que deseja limpar todas as linhas?')) {
+                document.getElementById('linhasEntrega').innerHTML = '';
+                linhaCounter = 0;
+                adicionarLinhaEntrega();
+            }
+        }
+
+        function salvarSessao() {
+            const tipoOperacao = document.getElementById('tipoOperacao').value;
+            const dataOperacao = document.getElementById('dataOperacao').value;
+            const horaOperacao = document.getElementById('horaOperacao').value;
+            const responsavel = document.getElementById('responsavelOperacao').value;
+            
+            if (!dataOperacao || !horaOperacao || !responsavel) {
+                showNotification('Preencha todos os campos da sessão!', 'warning');
+                return;
+            }
+            
+            // Coletar itens da sessão
+            const itens = [];
+            for (let i = 1; i <= linhaCounter; i++) {
+                const funcionario = document.getElementById(`funcionario-${i}`)?.value;
+                const epi = document.getElementById(`epi-${i}`)?.value;
+                const quantidade = parseInt(document.getElementById(`quantidade-${i}`)?.value || 0);
+                const observacao = document.getElementById(`observacao-${i}`)?.value;
+                
+                if (funcionario && epi && quantidade > 0) {
+                    itens.push({
+                        funcionario,
+                        epi,
+                        quantidade,
+                        observacao
+                    });
+                    
+                    // Atualizar estoque
+                    if (tipoOperacao === 'entrega') {
+                        if (estoque[epi]) {
+                            estoque[epi].quantidade -= quantidade;
+                            estoque[epi].ultimaMovimentacao = new Date().toISOString();
+                        }
+                    } else {
+                        if (estoque[epi]) {
+                            estoque[epi].quantidade += quantidade;
+                            estoque[epi].ultimaMovimentacao = new Date().toISOString();
+                        }
+                    }
+                }
+            }
+            
+            if (itens.length === 0) {
+                showNotification('Adicione pelo menos um item à sessão!', 'warning');
+                return;
+            }
+            
+            // Criar registro da sessão
+            const sessao = {
+                id: 'SESS' + Date.now(),
+                tipo: tipoOperacao,
+                data: dataOperacao,
+                hora: horaOperacao,
+                responsavel,
+                itens,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Adicionar ao histórico
+            historico.unshift(sessao);
+            
+            // Salvar dados
+            salvarDadosLocais();
+            
+            // Limpar formulário
+            limparFormularioDistribuicao();
+            
+            // Atualizar interface
+            atualizarTabelaHistorico();
+            atualizarTabelaEstoque();
+            atualizarEstatisticas();
+            
+            showNotification(`Sessão ${sessao.id} salva com sucesso!`, 'success');
+        }
+
+        function gerarRelatorioWhatsApp() {
+            const tipoOperacao = document.getElementById('tipoOperacao').value;
+            const dataOperacao = document.getElementById('dataOperacao').value;
+            const horaOperacao = document.getElementById('horaOperacao').value;
+            const responsavel = document.getElementById('responsavelOperacao').value;
+            
+            if (!dataOperacao || !horaOperacao || !responsavel) {
+                showNotification('Preencha todos os campos da sessão!', 'warning');
+                return;
+            }
+            
+            let relatorio = `*🦺 CONTROLE DE EPIs - GRUPOGPS*\n`;
+            relatorio += `*${tipoOperacao === 'entrega' ? 'ENTREGA' : 'DEVOLUÇÃO'} DE EPIs*\n\n`;
+            relatorio += `📅 Data: ${formatarData(dataOperacao)}\n`;
+            relatorio += `🕐 Hora: ${horaOperacao}\n`;
+            relatorio += `👤 Responsável: ${responsavel}\n`;
+            relatorio += `━━━━━━━━━━━━━━━━━━\n\n`;
+            
+            let itemCount = 0;
+            for (let i = 1; i <= linhaCounter; i++) {
+                const funcionarioId = document.getElementById(`funcionario-${i}`)?.value;
+                const epiId = document.getElementById(`epi-${i}`)?.value;
+                const quantidade = document.getElementById(`quantidade-${i}`)?.value;
+                const observacao = document.getElementById(`observacao-${i}`)?.value;
+                
+                if (funcionarioId && epiId && quantidade) {
+                    itemCount++;
+                    const funcionario = funcionarios.find(f => f.matricula === funcionarioId);
+                    const epi = epis.find(e => e.codigo === epiId);
+                    
+                    relatorio += `*${itemCount}.* ${funcionario?.nome || 'N/D'}\n`;
+                    relatorio += `   📌 ${epi?.nome || 'N/D'}\n`;
+                    relatorio += `   📦 Quantidade: ${quantidade}\n`;
+                    if (observacao) {
+                        relatorio += `   💬 Obs: ${observacao}\n`;
+                    }
+                    relatorio += `\n`;
+                }
+            }
+            
+            if (itemCount === 0) {
+                showNotification('Adicione pelo menos um item!', 'warning');
+                return;
+            }
+            
+            relatorio += `━━━━━━━━━━━━━━━━━━\n`;
+            relatorio += `Total de itens: ${itemCount}\n`;
+            relatorio += `\n_Sistema de Controle de EPIs_\n`;
+            relatorio += `_GrupoGPS © 2025_`;
+            
+            // Copiar para clipboard
+            navigator.clipboard.writeText(relatorio).then(() => {
+                showNotification('Relatório copiado! Cole no WhatsApp.', 'success');
+            }).catch(() => {
+                // Fallback - criar textarea temporária
+                const textarea = document.createElement('textarea');
+                textarea.value = relatorio;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showNotification('Relatório copiado! Cole no WhatsApp.', 'success');
+            });
+        }
+
+        function limparFormularioDistribuicao() {
+            document.getElementById('linhasEntrega').innerHTML = '';
+            linhaCounter = 0;
+            document.getElementById('responsavelOperacao').value = '';
+            inicializarDataHora();
+            adicionarLinhaEntrega();
+        }
+
+        // Funções de Funcionários
+        function abrirModalFuncionario() {
+            document.getElementById('modalFuncionario').classList.add('show');
+        }
+
+        function salvarFuncionario() {
+            const matricula = document.getElementById('matriculaFunc').value;
+            const nome = document.getElementById('nomeFunc').value;
+            const funcao = document.getElementById('funcaoFunc').value;
+            const escala = document.getElementById('escalaFunc').value;
+            const turno = document.getElementById('turnoFunc').value;
+            const status = document.getElementById('statusFunc').value;
+            
+            if (!matricula || !nome || !funcao || !escala) {
+                showNotification('Preencha todos os campos obrigatórios!', 'warning');
+                return;
+            }
+            
+            // Verificar se matrícula já existe
+            if (funcionarios.find(f => f.matricula === matricula)) {
+                showNotification('Matrícula já cadastrada!', 'error');
+                return;
+            }
+            
+            const novoFuncionario = {
+                matricula,
+                nome,
+                funcao,
+                escala,
+                turno,
+                status,
+                dataCadastro: new Date().toISOString()
+            };
+            
+            funcionarios.push(novoFuncionario);
+            salvarDadosLocais();
+            atualizarTabelaFuncionarios();
+            closeModal('modalFuncionario');
+            showNotification('Funcionário cadastrado com sucesso!', 'success');
+            
+            // Limpar formulário
+            document.getElementById('matriculaFunc').value = '';
+            document.getElementById('nomeFunc').value = '';
+            document.getElementById('funcaoFunc').value = '';
+            document.getElementById('escalaFunc').value = '';
+            document.getElementById('turnoFunc').value = '';
+        }
+
+        function removerFuncionario(matricula) {
+            if (confirm('Tem certeza que deseja remover este funcionário?')) {
+                funcionarios = funcionarios.filter(f => f.matricula !== matricula);
+                salvarDadosLocais();
+                atualizarTabelaFuncionarios();
+                showNotification('Funcionário removido!', 'info');
+            }
+        }
+
+        function atualizarTabelaFuncionarios() {
+            const tbody = document.getElementById('funcionariosTableBody');
+            
+            if (funcionarios.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                            Nenhum funcionário cadastrado
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = funcionarios.map(f => `
+                <tr>
+                    <td>${f.matricula}</td>
+                    <td>${f.nome}</td>
+                    <td>${f.funcao}</td>
+                    <td>${f.escala}</td>
+                    <td>${f.turno || '-'}</td>
+                    <td>
+                        <span class="badge-estoque ${f.status === 'Ativo' ? 'normal' : 'baixo'}">
+                            ${f.status}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" 
+                                onclick="removerFuncionario('${f.matricula}')">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Funções de EPIs
+        function abrirModalEPI() {
+            document.getElementById('modalEPI').classList.add('show');
+        }
+
+        function salvarEPI() {
+            const codigo = document.getElementById('codigoEPI').value;
+            const nome = document.getElementById('nomeEPI').value;
+            const categoria = document.getElementById('categoriaEPI').value;
+            const ca = document.getElementById('caEPI').value;
+            const validadeCA = document.getElementById('validadeCA').value;
+            const vidaUtil = parseInt(document.getElementById('vidaUtilEPI').value || 0);
+            
+            if (!codigo || !nome || !categoria) {
+                showNotification('Preencha todos os campos obrigatórios!', 'warning');
+                return;
+            }
+            
+            // Verificar se código já existe
+            if (epis.find(e => e.codigo === codigo)) {
+                showNotification('Código de EPI já cadastrado!', 'error');
+                return;
+            }
+            
+            const novoEPI = {
+                codigo,
+                nome,
+                categoria,
+                ca,
+                validadeCA,
+                vidaUtil
+            };
+            
+            epis.push(novoEPI);
+            
+            // Inicializar estoque
+            estoque[codigo] = {
+                quantidade: 0,
+                minimo: 10,
+                ultimaMovimentacao: new Date().toISOString()
+            };
+            
+            salvarDadosLocais();
+            atualizarTabelaEPIs();
+            atualizarTabelaEstoque();
+            closeModal('modalEPI');
+            showNotification('EPI cadastrado com sucesso!', 'success');
+            
+            // Limpar formulário
+            document.getElementById('codigoEPI').value = '';
+            document.getElementById('nomeEPI').value = '';
+            document.getElementById('categoriaEPI').value = '';
+            document.getElementById('caEPI').value = '';
+            document.getElementById('validadeCA').value = '';
+            document.getElementById('vidaUtilEPI').value = '';
+        }
+
+        function removerEPI(codigo) {
+            if (confirm('Tem certeza que deseja remover este EPI?')) {
+                epis = epis.filter(e => e.codigo !== codigo);
+                delete estoque[codigo];
+                salvarDadosLocais();
+                atualizarTabelaEPIs();
+                atualizarTabelaEstoque();
+                showNotification('EPI removido!', 'info');
+            }
+        }
+
+        function atualizarTabelaEPIs() {
+            const tbody = document.getElementById('episTableBody');
+            
+            if (epis.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                            Nenhum EPI cadastrado
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = epis.map(e => `
+                <tr>
+                    <td>${e.codigo}</td>
+                    <td>${e.nome}</td>
+                    <td>${e.categoria}</td>
+                    <td>${e.ca || '-'}</td>
+                    <td>${e.validadeCA ? formatarData(e.validadeCA) : '-'}</td>
+                    <td>${e.vidaUtil || '-'}</td>
+                    <td>
+                        <button class="btn danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" 
+                                onclick="removerEPI('${e.codigo}')">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Funções de Estoque
+        function abrirModalAjusteEstoque() {
+            const modal = document.getElementById('modalAjusteEstoque');
+            const select = document.getElementById('epiAjuste');
+            
+            select.innerHTML = '<option value="">Selecione um EPI...</option>' +
+                epis.map(e => `<option value="${e.codigo}">${e.nome}</option>`).join('');
+            
+            modal.classList.add('show');
+        }
+
+        function salvarAjusteEstoque() {
+            const epiCodigo = document.getElementById('epiAjuste').value;
+            const tipoAjuste = document.getElementById('tipoAjuste').value;
+            const quantidade = parseInt(document.getElementById('quantidadeAjuste').value || 0);
+            const motivo = document.getElementById('motivoAjuste').value;
+            
+            if (!epiCodigo || !quantidade || !motivo) {
+                showNotification('Preencha todos os campos!', 'warning');
+                return;
+            }
+            
+            if (!estoque[epiCodigo]) {
+                estoque[epiCodigo] = {
+                    quantidade: 0,
+                    minimo: 10,
+                    ultimaMovimentacao: new Date().toISOString()
+                };
+            }
+            
+            if (tipoAjuste === 'entrada') {
+                estoque[epiCodigo].quantidade += quantidade;
+            } else if (tipoAjuste === 'saida') {
+                estoque[epiCodigo].quantidade -= quantidade;
+            } else {
+                estoque[epiCodigo].quantidade = quantidade;
+            }
+            
+            estoque[epiCodigo].ultimaMovimentacao = new Date().toISOString();
+            
+            // Registrar no histórico
+            const ajuste = {
+                id: 'AJUSTE' + Date.now(),
+                tipo: 'ajuste_estoque',
+                data: new Date().toISOString().split('T')[0],
+                hora: new Date().toTimeString().split(' ')[0].substring(0, 5),
+                responsavel: 'Sistema',
+                itens: [{
+                    funcionario: '-',
+                    epi: epiCodigo,
+                    quantidade: quantidade,
+                    observacao: `${tipoAjuste.toUpperCase()}: ${motivo}`
+                }],
+                timestamp: new Date().toISOString()
+            };
+            
+            historico.unshift(ajuste);
+            
+            salvarDadosLocais();
+            atualizarTabelaEstoque();
+            atualizarTabelaHistorico();
+            atualizarEstatisticas();
+            closeModal('modalAjusteEstoque');
+            showNotification('Estoque ajustado com sucesso!', 'success');
+            
+            // Limpar formulário
+            document.getElementById('epiAjuste').value = '';
+            document.getElementById('quantidadeAjuste').value = '';
+            document.getElementById('motivoAjuste').value = '';
+        }
+
+        function atualizarTabelaEstoque() {
+            const tbody = document.getElementById('estoqueTableBody');
+            
+            if (epis.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                            Nenhum item no estoque
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = epis.map(e => {
+                const est = estoque[e.codigo] || { quantidade: 0, minimo: 10 };
+                const status = est.quantidade <= 0 ? 'critico' : 
+                              est.quantidade <= est.minimo ? 'baixo' : 'normal';
+                
+                return `
+                    <tr>
+                        <td>${e.nome}</td>
+                        <td>${e.categoria}</td>
+                        <td>${est.quantidade}</td>
+                        <td>${est.minimo}</td>
+                        <td>
+                            <span class="badge-estoque ${status}">
+                                ${status === 'critico' ? 'Crítico' : 
+                                  status === 'baixo' ? 'Baixo' : 'Normal'}
+                            </span>
+                        </td>
+                        <td>${est.ultimaMovimentacao ? formatarDataHora(est.ultimaMovimentacao) : '-'}</td>
+                        <td>
+                            <button class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" 
+                                    onclick="abrirModalAjusteEstoque()">
+                                🔧
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Funções de Histórico
+        function atualizarTabelaHistorico() {
+            const tbody = document.getElementById('historicoTableBody');
+            
+            if (historico.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem; color: #6c757d;">
+                            Nenhuma movimentação registrada
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            let html = '';
+            historico.slice(0, 100).forEach(sessao => {
+                sessao.itens.forEach(item => {
+                    const funcionario = funcionarios.find(f => f.matricula === item.funcionario);
+                    const epi = epis.find(e => e.codigo === item.epi);
+                    
+                    html += `
+                        <tr>
+                            <td>${sessao.id}</td>
+                            <td>${formatarData(sessao.data)} ${sessao.hora}</td>
+                            <td>${sessao.tipo === 'entrega' ? '📦 Entrega' : '↩️ Devolução'}</td>
+                            <td>${funcionario?.nome || item.funcionario}</td>
+                            <td>${epi?.nome || item.epi}</td>
+                            <td>${item.quantidade}</td>
+                            <td>${sessao.responsavel}</td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            tbody.innerHTML = html;
+        }
+
+        function filtrarHistorico() {
+            // Implementar filtros do histórico
+            showNotification('Filtros aplicados!', 'info');
+        }
+
+        function exportarHistorico() {
+            // Preparar dados para exportação
+            const dados = [];
+            historico.forEach(sessao => {
+                sessao.itens.forEach(item => {
+                    const funcionario = funcionarios.find(f => f.matricula === item.funcionario);
+                    const epi = epis.find(e => e.codigo === item.epi);
+                    
+                    dados.push({
+                        'Sessão': sessao.id,
+                        'Data': formatarData(sessao.data),
+                        'Hora': sessao.hora,
+                        'Tipo': sessao.tipo === 'entrega' ? 'Entrega' : 'Devolução',
+                        'Funcionário': funcionario?.nome || item.funcionario,
+                        'Matrícula': item.funcionario,
+                        'EPI': epi?.nome || item.epi,
+                        'Quantidade': item.quantidade,
+                        'Observação': item.observacao || '',
+                        'Responsável': sessao.responsavel
+                    });
+                });
+            });
+            
+            // Criar arquivo Excel
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
+            
+            // Download
+            const nomeArquivo = `Historico_EPIs_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}.xlsx`;
+            XLSX.writeFile(wb, nomeArquivo);
+            
+            showNotification('Histórico exportado com sucesso!', 'success');
+        }
+
+        // Funções de Interface
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            const button = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
+            const tab = document.getElementById(tabName + '-tab');
+
+            if (button) button.classList.add('active');
+            if (tab) tab.classList.add('active');
+            
+            // Atualizar dados da aba
+            switch(tabName) {
+                case 'funcionarios':
+                    atualizarTabelaFuncionarios();
+                    break;
+                case 'epis':
+                    atualizarTabelaEPIs();
+                    break;
+                case 'estoque':
+                    atualizarTabelaEstoque();
+                    break;
+                case 'historico':
+                    atualizarTabelaHistorico();
+                    break;
+                case 'relatorios':
+                    atualizarRelatorios();
+                    break;
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Funções de Filtros
+        function filtrarFuncionarios() {
+            const busca = document.getElementById('buscarFuncionario').value.toLowerCase();
+            const rows = document.querySelectorAll('#funcionariosTableBody tr');
+            
+            rows.forEach(row => {
+                const texto = row.textContent.toLowerCase();
+                row.style.display = texto.includes(busca) ? '' : 'none';
+            });
+        }
+
+        function filtrarEPIs() {
+            const busca = document.getElementById('buscarEPI').value.toLowerCase();
+            const rows = document.querySelectorAll('#episTableBody tr');
+            
+            rows.forEach(row => {
+                const texto = row.textContent.toLowerCase();
+                row.style.display = texto.includes(busca) ? '' : 'none';
+            });
+        }
+
+        function filtrarEstoque() {
+            const busca = document.getElementById('buscarEstoque').value.toLowerCase();
+            const rows = document.querySelectorAll('#estoqueTableBody tr');
+            
+            rows.forEach(row => {
+                const texto = row.textContent.toLowerCase();
+                row.style.display = texto.includes(busca) ? '' : 'none';
+            });
+        }
+
+        // Funções de Relatórios
+        function atualizarRelatorios() {
+            const hoje = new Date().toISOString().split('T')[0];
+            
+            // Contar entregas e devoluções de hoje
+            let entregasHoje = 0;
+            let devolucoesHoje = 0;
+            
+            historico.forEach(sessao => {
+                if (sessao.data === hoje) {
+                    sessao.itens.forEach(item => {
+                        if (sessao.tipo === 'entrega') {
+                            entregasHoje += item.quantidade;
+                        } else {
+                            devolucoesHoje += item.quantidade;
+                        }
+                    });
+                }
+            });
+            
+            document.getElementById('entregasHoje').textContent = entregasHoje;
+            document.getElementById('devolucoesHoje').textContent = devolucoesHoje;
+            
+            // Calcular consumo mensal
+            const mesAtual = new Date().getMonth();
+            const anoAtual = new Date().getFullYear();
+            let consumoMensal = 0;
+            
+            historico.forEach(sessao => {
+                const data = new Date(sessao.data);
+                if (data.getMonth() === mesAtual && data.getFullYear() === anoAtual) {
+                    sessao.itens.forEach(item => {
+                        if (sessao.tipo === 'entrega') {
+                            consumoMensal += item.quantidade;
+                        }
+                    });
+                }
+            });
+            
+            document.getElementById('consumoMensal').textContent = consumoMensal;
+            
+            // Análise de consumo por funcionário
+            const consumoPorFuncionario = {};
+            
+            historico.forEach(sessao => {
+                if (sessao.tipo === 'entrega') {
+                    sessao.itens.forEach(item => {
+                        if (!consumoPorFuncionario[item.funcionario]) {
+                            consumoPorFuncionario[item.funcionario] = {
+                                total: 0,
+                                ultimoMes: 0
+                            };
+                        }
+                        consumoPorFuncionario[item.funcionario].total += item.quantidade;
+                        
+                        const data = new Date(sessao.data);
+                        const diasAtras = (new Date() - data) / (1000 * 60 * 60 * 24);
+                        if (diasAtras <= 30) {
+                            consumoPorFuncionario[item.funcionario].ultimoMes += item.quantidade;
+                        }
+                    });
+                }
+            });
+            
+            // Atualizar tabela de consumo
+            const tbody = document.getElementById('consumoTableBody');
+            const consumoArray = Object.entries(consumoPorFuncionario)
+                .map(([matricula, dados]) => {
+                    const funcionario = funcionarios.find(f => f.matricula === matricula);
+                    return {
+                        matricula,
+                        nome: funcionario?.nome || matricula,
+                        funcao: funcionario?.funcao || '-',
+                        total: dados.total,
+                        ultimoMes: dados.ultimoMes
+                    };
+                })
+                .sort((a, b) => b.ultimoMes - a.ultimoMes)
+                .slice(0, 10);
+            
+            if (consumoArray.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem; color: #6c757d;">
+                            Sem dados para exibir
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = consumoArray.map(c => `
+                    <tr>
+                        <td>${c.nome}</td>
+                        <td>${c.funcao}</td>
+                        <td>${c.total}</td>
+                        <td>${c.ultimoMes}</td>
+                        <td>
+                            <span class="badge-estoque ${c.ultimoMes > 20 ? 'baixo' : 'normal'}">
+                                ${c.ultimoMes > 20 ? 'Alto Consumo' : 'Normal'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // Funções de Estatísticas
+        function atualizarEstatisticas() {
+            // Total de EPIs cadastrados
+            document.getElementById('totalEPIs').textContent = epis.length;
+            
+            // Total em estoque
+            let totalEstoque = 0;
+            let itensCriticos = 0;
+            
+            Object.entries(estoque).forEach(([codigo, dados]) => {
+                totalEstoque += dados.quantidade;
+                if (dados.quantidade <= 0 || dados.quantidade <= dados.minimo) {
+                    itensCriticos++;
+                }
+            });
+            
+            document.getElementById('totalEstoque').textContent = totalEstoque;
+            document.getElementById('itensCreditos').textContent = itensCriticos;
+            
+            // Entregas hoje
+            const hoje = new Date().toISOString().split('T')[0];
+            let entregasHoje = 0;
+            
+            historico.forEach(sessao => {
+                if (sessao.data === hoje && sessao.tipo === 'entrega') {
+                    entregasHoje += sessao.itens.length;
+                }
+            });
+            
+            document.getElementById('totalEntregas').textContent = entregasHoje;
+            
+            // Total de funcionários
+            document.getElementById('totalFuncionarios').textContent = 
+                funcionarios.filter(f => f.status === 'Ativo').length;
+        }
+
+        // Funções Utilitárias
+        function inicializarDataHora() {
+            const agora = new Date();
+            document.getElementById('dataOperacao').value = agora.toISOString().split('T')[0];
+            document.getElementById('horaOperacao').value = agora.toTimeString().split(' ')[0].substring(0, 5);
+        }
+
+        function formatarData(dataISO) {
+            if (!dataISO) return '-';
+            const [ano, mes, dia] = dataISO.split('-');
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function formatarDataHora(isoString) {
+            const data = new Date(isoString);
+            return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}`;
+        }
+
+        // Event Listeners
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.classList.remove('show');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.show').forEach(modal => {
+                    modal.classList.remove('show');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
