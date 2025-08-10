@@ -1,16 +1,16 @@
 [
   {
     "codigo": "EPI001",
-    "nome": "Capacete de Segurança",
-    "categoria": "Proteção da Cabeça",
+    "nome": "Capacete de SeguranÃ§a",
+    "categoria": "ProteÃ§Ã£o da CabeÃ§a",
     "ca": "12345",
     "validadeCA": "2026-12-31",
     "vidaUtil": 365
   },
   {
     "codigo": "EPI002",
-    "nome": "Óculos de Proteção",
-    "categoria": "Proteção Visual",
+    "nome": "Ãculos de ProteÃ§Ã£o",
+    "categoria": "ProteÃ§Ã£o Visual",
     "ca": "23456",
     "validadeCA": "2026-12-31",
     "vidaUtil": 180
@@ -18,15 +18,15 @@
   {
     "codigo": "EPI003",
     "nome": "Luva PVC",
-    "categoria": "Proteção das Mãos",
+    "categoria": "ProteÃ§Ã£o das MÃ£os",
     "ca": "34567",
     "validadeCA": "2026-12-31",
     "vidaUtil": 30
   },
   {
     "codigo": "EPI004",
-    "nome": "Botina de Segurança",
-    "categoria": "Proteção dos Pés",
+    "nome": "Botina de SeguranÃ§a",
+    "categoria": "ProteÃ§Ã£o dos PÃ©s",
     "ca": "45678",
     "validadeCA": "2026-12-31",
     "vidaUtil": 180
@@ -34,15 +34,15 @@
   {
     "codigo": "EPI005",
     "nome": "Bota PVC",
-    "categoria": "Proteção dos Pés",
+    "categoria": "ProteÃ§Ã£o dos PÃ©s",
     "ca": "56789",
     "validadeCA": "2026-12-31",
     "vidaUtil": 90
   },
   {
     "codigo": "EPI006",
-    "nome": "Macacão PVC",
-    "categoria": "Proteção do Corpo",
+    "nome": "MacacÃ£o PVC",
+    "categoria": "ProteÃ§Ã£o do Corpo",
     "ca": "67890",
     "validadeCA": "2026-12-31",
     "vidaUtil": 60
@@ -50,7 +50,7 @@
   {
     "codigo": "EPI007",
     "nome": "Protetor Auricular",
-    "categoria": "Proteção Auditiva",
+    "categoria": "ProteÃ§Ã£o Auditiva",
     "ca": "78901",
     "validadeCA": "2026-12-31",
     "vidaUtil": 30
@@ -58,7 +58,7 @@
   {
     "codigo": "EPI008",
     "nome": "Viseira Facial",
-    "categoria": "Proteção Visual",
+    "categoria": "ProteÃ§Ã£o Visual",
     "ca": "89012",
     "validadeCA": "2026-12-31",
     "vidaUtil": 90
@@ -66,15 +66,15 @@
   {
     "codigo": "EPI009",
     "nome": "Respirador PFF2",
-    "categoria": "Proteção Respiratória",
+    "categoria": "ProteÃ§Ã£o RespiratÃ³ria",
     "ca": "90123",
     "validadeCA": "2026-12-31",
     "vidaUtil": 1
   },
   {
     "codigo": "EPI010",
-    "nome": "Cinto de Segurança",
-    "categoria": "Proteção Contra Quedas",
+    "nome": "Cinto de SeguranÃ§a",
+    "categoria": "ProteÃ§Ã£o Contra Quedas",
     "ca": "01234",
     "validadeCA": "2026-12-31",
     "vidaUtil": 365
