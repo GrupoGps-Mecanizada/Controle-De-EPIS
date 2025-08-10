@@ -2209,12 +2209,10 @@
             updateSyncStatus('loading', 'Sincronizando...');
             
             try {
-                // Criar estrutura de pastas se não existir
                 await createGitHubStructure(token);
                 
-                // CORREÇÃO: Filtrar token das configurações antes de sincronizar
                 const configuracoesSeguras = { ...configuracoes };
-                delete configuracoesSeguras.githubToken; // Remove o token se existir
+                delete configuracoesSeguras.githubToken;
 
                 const files = [
                     { path: GITHUB_CONFIG.paths.funcionarios, data: funcionarios, name: 'Funcionários' },
@@ -2226,7 +2224,6 @@
                     { path: GITHUB_CONFIG.paths.configuracoes, data: configuracoesSeguras, name: 'Configurações' }
                 ];
 
-                
                 let sucessos = 0;
                 let erros = 0;
                 
@@ -2261,27 +2258,15 @@
 
         async function createGitHubStructure(token) {
             try {
-                // Verificar se o diretório data existe, se não, criar
                 const response = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data`, {
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
+                    headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
                 });
                 
                 if (response.status === 404) {
-                    // Criar diretório data com arquivo README
                     await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data/README.md`, {
                         method: 'PUT',
-                        headers: {
-                            'Authorization': `token ${token}`,
-                            'Accept': 'application/vnd.github.v3+json',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: 'Criar estrutura inicial do sistema de EPIs',
-                            content: btoa('# Dados do Sistema de Controle de EPIs\n\nEste diretório contém os dados do sistema.')
-                        })
+                        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: 'Criar estrutura inicial do sistema de EPIs', content: btoa('# Dados do Sistema de Controle de EPIs') })
                     });
                 }
             } catch (error) {
@@ -2289,77 +2274,72 @@
             }
         }
 
+        // *** INÍCIO DA CORREÇÃO PRINCIPAL ***
         async function updateGitHubFile(token, path, data) {
-            try {
-                // Primeiro, tentar obter o arquivo para pegar o SHA
-                let sha = null;
-                let fileExists = false;
-                
+            const maxRetries = 3;
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
+                    // 1. Obter o SHA mais recente em CADA tentativa
+                    let sha = null;
                     const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
-                        headers: {
-                            'Authorization': `token ${token}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
+                        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
                     });
-                    
+
                     if (getResponse.ok) {
                         const fileData = await getResponse.json();
                         sha = fileData.sha;
-                        fileExists = true;
                     } else if (getResponse.status !== 404) {
-                        throw new Error(`Erro ao verificar arquivo: ${getResponse.statusText}`);
+                        throw new Error(`Falha ao obter SHA: ${getResponse.statusText}`);
                     }
-                } catch (error) {
-                    // Se o erro não for 404, é um erro real
-                    if (!error.message.includes('404')) {
-                        console.warn(`Aviso ao verificar ${path}:`, error);
+
+                    // 2. Preparar corpo da requisição
+                    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+                    const body = {
+                        message: `${sha ? 'Atualizar' : 'Criar'} ${path.split('/').pop()} - ${new Date().toLocaleString('pt-BR')}`,
+                        content: content,
+                        branch: GITHUB_CONFIG.branch
+                    };
+                    if (sha) {
+                        body.sha = sha;
                     }
-                }
-                
-                // Criar ou atualizar o arquivo
-                const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
-                const body = {
-                    message: `${fileExists ? 'Atualizar' : 'Criar'} ${path.split('/').pop()} - ${new Date().toLocaleString('pt-BR')}`,
-                    content: content,
-                    branch: GITHUB_CONFIG.branch
-                };
-                
-                if (sha) {
-                    body.sha = sha;
-                }
-                
-                const response = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(body)
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    console.warn(`Erro ${response.status} ao sincronizar ${path}:`, errorData);
+
+                    // 3. Tentar a atualização (PUT)
+                    const response = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    if (response.ok) {
+                        console.log(`✅ Arquivo ${path} sincronizado com sucesso na tentativa ${attempt}.`);
+                        return await response.json(); // Sucesso, sair da função
+                    }
                     
-                    // Se for erro 409 (conflict), tentar novamente buscando o SHA mais recente
+                    // 4. Lidar com erros
+                    lastError = await response.json().catch(() => ({ message: response.statusText }));
                     if (response.status === 409) {
-                        console.log(`Tentando novamente ${path} devido a conflito...`);
-                        return await updateGitHubFile(token, path, data);
+                        console.warn(`Tentativa ${attempt}: Conflito (409) para ${path}. Tentando novamente...`);
+                        if (attempt < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Esperar um pouco antes de tentar de novo
+                        }
+                    } else {
+                        // Para outros erros (401, 403, 500 etc.), falhar imediatamente
+                        throw new Error(`Erro ${response.status}: ${lastError.message || response.statusText}`);
                     }
-                    
-                    throw new Error(`Erro ${response.status}: ${errorData.message || response.statusText}`);
+
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Erro na tentativa ${attempt} para ${path}:`, error);
                 }
-                
-                console.log(`✅ Arquivo ${path} sincronizado com sucesso`);
-                return await response.json();
-                
-            } catch (error) {
-                console.error(`❌ Erro ao sincronizar ${path}:`, error);
-                throw error;
             }
+            
+            // Se todas as tentativas falharem
+            throw new Error(`Falha ao sincronizar ${path} após ${maxRetries} tentativas. Último erro: ${lastError.message}`);
         }
+        // *** FIM DA CORREÇÃO PRINCIPAL ***
+
 
         function updateSyncStatus(status, message) {
             const dot = document.getElementById('syncDot');
@@ -2803,24 +2783,19 @@
                 return;
             }
             
-            // CORREÇÃO: Salvar em múltiplos lugares para garantir persistência
             GITHUB_CONFIG.token = token;
-            // ❌ NÃO salvar no objeto configuracoes (será sincronizado com GitHub)
             localStorage.setItem('grupoGPS_githubToken', token);
             
-            // CORREÇÃO: Salvar apenas configurações SEM o token
             saveLocalData();
             
             showNotification('Token do GitHub salvo com sucesso!', 'success');
             
-            // Testar conexão automaticamente
             setTimeout(() => {
                 testarConexaoGitHub();
             }, 500);
         }
 
         function testarConexaoGitHub() {
-            // CORREÇÃO: Buscar o token sem olhar o objeto `configuracoes`
             const token = document.getElementById('githubToken').value.trim() || 
                          GITHUB_CONFIG.token || 
                          localStorage.getItem('grupoGPS_githubToken');
@@ -2832,25 +2807,15 @@
             
             showNotification('Testando conexão...', 'info');
             
-            // Testar acesso ao repositório
             fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}`, {
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
+                headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
             })
             .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (response.ok) { return response.json(); } 
+                else { throw new Error(`HTTP ${response.status}: ${response.statusText}`); }
             })
             .then(data => {
                 showNotification(`✅ Conexão OK! Repositório: ${data.full_name}`, 'success');
-                console.log('Repositório acessível:', data);
-                
-                // Salvar o token se o teste passou
                 if (document.getElementById('githubToken').value.trim()) {
                     GITHUB_CONFIG.token = token;
                     localStorage.setItem('grupoGPS_githubToken', token);
@@ -2869,10 +2834,7 @@
                     ...sessaoAtual,
                     funcionarios: Array.from(sessaoAtual.funcionarios.entries()).map(([matricula, funcData]) => [
                         matricula,
-                        {
-                            ...funcData,
-                            epis: Array.from(funcData.epis.entries())
-                        }
+                        { ...funcData, epis: Array.from(funcData.epis.entries()) }
                     ])
                 };
                 localStorage.setItem('grupoGPS_sessaoAtual', JSON.stringify(sessionData));
@@ -2897,15 +2859,9 @@
                 return;
             }
             
-            // Gerar ID da sessão
             const sessionId = `DIST${Date.now()}`;
-            
-            // Processar distribuição
             const itensProcessados = [];
-            let totalEntregas = 0;
-            let totalDevolucoes = 0;
-            let totalTrocas = 0;
-            let totalPrimeiras = 0;
+            let totalEntregas = 0, totalDevolucoes = 0, totalTrocas = 0, totalPrimeiras = 0;
             
             sessaoAtual.funcionarios.forEach((funcData, matricula) => {
                 funcData.epis.forEach((epiData, epiCodigo) => {
@@ -2919,28 +2875,17 @@
                         entregouAntigo: epiData.entregouAntigo,
                         justificativa: epiData.justificativa
                     };
-                    
                     itensProcessados.push(item);
                     
-                    // Atualizar estatísticas
                     switch(epiData.tipoOperacao) {
-                        case 'primeira_entrega':
-                            totalPrimeiras += epiData.quantidade;
-                            break;
-                        case 'entrega':
-                            totalEntregas += epiData.quantidade;
-                            break;
-                        case 'troca':
-                            totalTrocas += epiData.quantidade;
-                            break;
-                        case 'devolucao':
-                            totalDevolucoes += epiData.quantidade;
-                            break;
+                        case 'primeira_entrega': totalPrimeiras += epiData.quantidade; break;
+                        case 'entrega': totalEntregas += epiData.quantidade; break;
+                        case 'troca': totalTrocas += epiData.quantidade; break;
+                        case 'devolucao': totalDevolucoes += epiData.quantidade; break;
                     }
                     
-                    // Atualizar estoque
                     if (estoque[epiCodigo]) {
-                        if (epiData.tipoOperacao === 'entrega' || epiData.tipoOperacao === 'primeira_entrega' || epiData.tipoOperacao === 'troca') {
+                        if (['entrega', 'primeira_entrega', 'troca'].includes(epiData.tipoOperacao)) {
                             estoque[epiCodigo].quantidade -= epiData.quantidade;
                         }
                         if (epiData.tipoOperacao === 'devolucao') {
@@ -2951,69 +2896,35 @@
                 });
             });
             
-            // Criar registro da distribuição
             const distribuicao = {
-                id: sessionId,
-                data: data,
-                hora: hora,
-                responsavel: responsavel,
+                id: sessionId, data, hora, responsavel,
                 funcionarios: Array.from(sessaoAtual.funcionarios.keys()),
-                totalEntregas: totalEntregas,
-                totalDevolucoes: totalDevolucoes,
-                totalTrocas: totalTrocas,
-                totalPrimeiras: totalPrimeiras,
+                totalEntregas, totalDevolucoes, totalTrocas, totalPrimeiras,
                 itensDetalhados: itensProcessados,
                 timestamp: new Date().toISOString()
             };
             
-            // Adicionar aos registros
             distribuicoes.unshift(distribuicao);
             
-            // Adicionar itens ao histórico geral
             itensProcessados.forEach(item => {
-                historico.unshift({
-                    ...item,
-                    sessao: sessionId,
-                    data: data,
-                    hora: hora,
-                    responsavel: responsavel,
-                    timestamp: new Date().toISOString()
-                });
+                historico.unshift({ ...item, sessao: sessionId, data, hora, responsavel, timestamp: new Date().toISOString() });
             });
             
-            // Salvar dados
             saveLocalData();
-            
-            // Limpar sessão
             limparSessao();
-            
-            // Atualizar interface
             updateAllTables();
             updateStatistics();
-            
-            // Sincronizar se online
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
             
             showNotification(`Sessão ${sessionId} finalizada com sucesso!`, 'success');
         }
 
         function limparSessao() {
-            if (sessaoAtual.funcionarios.size > 0) {
-                if (!confirm('Tem certeza que deseja limpar a sessão atual?')) {
-                    return;
-                }
+            if (sessaoAtual.funcionarios.size > 0 && !confirm('Tem certeza que deseja limpar a sessão atual?')) {
+                return;
             }
             
-            sessaoAtual = {
-                id: null,
-                data: '',
-                hora: '',
-                responsavel: '',
-                funcionarios: new Map()
-            };
-            
+            sessaoAtual = { id: null, data: '', hora: '', responsavel: '', funcionarios: new Map() };
             localStorage.removeItem('grupoGPS_sessaoAtual');
             inicializarDataHora();
             updateEmployeeRecords();
@@ -3035,38 +2946,27 @@
             relatorio += `👤 Responsável: ${responsavel}\n`;
             relatorio += `━━━━━━━━━━━━━━━━━━\n\n`;
             
-            let contador = 1;
-            let totalEntregas = 0;
-            let totalTrocas = 0;
-            let totalPrimeiras = 0;
-            let naoDevolveram = 0;
+            let contador = 1, totalEntregas = 0, totalTrocas = 0, totalPrimeiras = 0, naoDevolveram = 0;
             
             sessaoAtual.funcionarios.forEach((funcData, matricula) => {
                 const func = funcData.dados;
-                relatorio += `*${contador}. ${func.nome}*\n`;
-                relatorio += `   Mat: ${func.matricula} | ${func.funcao}\n`;
+                relatorio += `*${contador}. ${func.nome}*\n   Mat: ${func.matricula} | ${func.funcao}\n`;
                 
                 funcData.epis.forEach((epiData, epiCodigo) => {
                     const epi = epis.find(e => e.codigo === epiCodigo);
                     const tipo = epiData.tipoOperacao || 'entrega';
-                    
                     let icone = '';
                     switch(tipo) {
                         case 'primeira_entrega': icone = '🆕'; totalPrimeiras++; break;
                         case 'entrega': icone = '📦'; totalEntregas++; break;
                         case 'troca': icone = '🔄'; totalTrocas++; break;
                     }
-                    
                     relatorio += `   ${icone} ${epi ? epi.nome : epiCodigo} (${epiData.quantidade})\n`;
-                    
                     if (epiData.entregouAntigo === 'nao') {
                         relatorio += `   ⚠️ NÃO devolveu EPI antigo\n`;
-                        if (epiData.justificativa) {
-                            relatorio += `   💬 ${epiData.justificativa}\n`;
-                        }
+                        if (epiData.justificativa) { relatorio += `   💬 ${epiData.justificativa}\n`; }
                         naoDevolveram++;
                     }
-                    
                     if (epiData.observacao && !epiData.observacao.includes('Entregou EPI antigo')) {
                         relatorio += `   📝 ${epiData.observacao}\n`;
                     }
@@ -3075,26 +2975,14 @@
                 contador++;
             });
             
-            relatorio += `━━━━━━━━━━━━━━━━━━\n`;
-            relatorio += `📊 *RESUMO:*\n`;
-            relatorio += `👥 Funcionários: ${sessaoAtual.funcionarios.size}\n`;
+            relatorio += `━━━━━━━━━━━━━━━━━━\n📊 *RESUMO:*\n👥 Funcionários: ${sessaoAtual.funcionarios.size}\n`;
             if (totalPrimeiras > 0) relatorio += `🆕 Primeiras entregas: ${totalPrimeiras}\n`;
             if (totalEntregas > 0) relatorio += `📦 Entregas: ${totalEntregas}\n`;
             if (totalTrocas > 0) relatorio += `🔄 Trocas: ${totalTrocas}\n`;
             if (naoDevolveram > 0) relatorio += `⚠️ Não devolveram: ${naoDevolveram}\n`;
             relatorio += `\n_Sistema GrupoGPS_`;
             
-            // Copiar para clipboard
             navigator.clipboard.writeText(relatorio).then(() => {
-                showNotification('Relatório copiado! Cole no WhatsApp.', 'success');
-            }).catch(() => {
-                // Fallback
-                const textarea = document.createElement('textarea');
-                textarea.value = relatorio;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
                 showNotification('Relatório copiado! Cole no WhatsApp.', 'success');
             });
         }
@@ -3153,22 +3041,11 @@
                 return;
             }
             
-            const funcionarioData = {
-                matricula,
-                nome,
-                funcao,
-                escala,
-                equipamento,
-                supervisor,
-                status,
-                dataCadastro: new Date().toISOString()
-            };
+            const funcionarioData = { matricula, nome, funcao, escala, equipamento, supervisor, status, dataCadastro: new Date().toISOString() };
             
             if (isEdit) {
                 const index = funcionarios.findIndex(f => f.matricula === matricula);
-                if (index !== -1) {
-                    funcionarios[index] = { ...funcionarios[index], ...funcionarioData };
-                }
+                if (index !== -1) { funcionarios[index] = { ...funcionarios[index], ...funcionarioData }; }
             } else {
                 funcionarios.push(funcionarioData);
             }
@@ -3178,10 +3055,7 @@
             updateFilters();
             closeModal('modalFuncionario');
             showNotification(`Funcionário ${isEdit ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
         }
 
         function abrirModalNovoFuncionario() {
@@ -3196,39 +3070,17 @@
             const funcao = document.getElementById('quickFuncao').value;
             const escala = document.getElementById('quickEscala').value;
             
-            if (!matricula || !nome) {
-                showNotification('Preencha matrícula e nome!', 'warning');
-                return;
-            }
+            if (!matricula || !nome) { showNotification('Preencha matrícula e nome!', 'warning'); return; }
+            if (funcionarios.find(f => f.matricula === matricula)) { showNotification('Matrícula já existe!', 'error'); return; }
             
-            if (funcionarios.find(f => f.matricula === matricula)) {
-                showNotification('Matrícula já existe!', 'error');
-                return;
-            }
-            
-            const novoFuncionario = {
-                matricula,
-                nome,
-                funcao,
-                escala,
-                equipamento: '',
-                supervisor: '',
-                status: 'Ativo',
-                dataCadastro: new Date().toISOString()
-            };
+            const novoFuncionario = { matricula, nome, funcao, escala, equipamento: '', supervisor: '', status: 'Ativo', dataCadastro: new Date().toISOString() };
             
             funcionarios.push(novoFuncionario);
             saveLocalData();
-            
-            // Selecionar automaticamente
             selectEmployee(matricula);
-            
             closeModal('modalNovoFuncionario');
             showNotification('Funcionário adicionado rapidamente!', 'success');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
         }
 
         function removerFuncionario(matricula) {
@@ -3238,10 +3090,7 @@
                 updateAllTables();
                 updateFilters();
                 showNotification('Funcionário removido!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
+                if (navigator.onLine) { syncData(); }
             }
         }
 
@@ -3284,42 +3133,21 @@
             const validadeCA = document.getElementById('validadeCA').value;
             const vidaUtil = parseInt(document.getElementById('vidaUtilEPI').value || 0);
             
-            if (!codigo || !nome || !categoria) {
-                showNotification('Preencha todos os campos obrigatórios!', 'warning');
-                return;
-            }
+            if (!codigo || !nome || !categoria) { showNotification('Preencha todos os campos obrigatórios!', 'warning'); return; }
             
             const isEdit = document.getElementById('codigoEPI').disabled;
             
-            if (!isEdit && epis.find(e => e.codigo === codigo)) {
-                showNotification('Código de EPI já cadastrado!', 'error');
-                return;
-            }
+            if (!isEdit && epis.find(e => e.codigo === codigo)) { showNotification('Código de EPI já cadastrado!', 'error'); return; }
             
-            const epiData = {
-                codigo,
-                nome,
-                categoria,
-                ca,
-                validadeCA,
-                vidaUtil
-            };
+            const epiData = { codigo, nome, categoria, ca, validadeCA, vidaUtil };
             
             if (isEdit) {
                 const index = epis.findIndex(e => e.codigo === codigo);
-                if (index !== -1) {
-                    epis[index] = { ...epis[index], ...epiData };
-                }
+                if (index !== -1) { epis[index] = { ...epis[index], ...epiData }; }
             } else {
                 epis.push(epiData);
-                
-                // Inicializar estoque
                 if (!estoque[codigo]) {
-                    estoque[codigo] = {
-                        quantidade: 0,
-                        minimo: 10,
-                        ultimaMovimentacao: new Date().toISOString()
-                    };
+                    estoque[codigo] = { quantidade: 0, minimo: 10, ultimaMovimentacao: new Date().toISOString() };
                 }
             }
             
@@ -3328,10 +3156,7 @@
             updateFilters();
             closeModal('modalEPI');
             showNotification(`EPI ${isEdit ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
         }
 
         function removerEPI(codigo) {
@@ -3342,10 +3167,7 @@
                 updateAllTables();
                 updateFilters();
                 showNotification('EPI removido!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
+                if (navigator.onLine) { syncData(); }
             }
         }
 
@@ -3354,7 +3176,6 @@
             const select = document.getElementById('epiAjuste');
             select.innerHTML = '<option value="">Selecione um EPI...</option>' +
                 epis.map(e => `<option value="${e.codigo}">${e.nome}</option>`).join('');
-            
             document.getElementById('modalAjusteEstoque').classList.add('show');
         }
 
@@ -3364,61 +3185,39 @@
             const quantidade = parseInt(document.getElementById('quantidadeAjuste').value || 0);
             const motivo = document.getElementById('motivoAjuste').value;
             
-            if (!epiCodigo || !quantidade || !motivo) {
-                showNotification('Preencha todos os campos!', 'warning');
-                return;
-            }
+            if (!epiCodigo || !quantidade || !motivo) { showNotification('Preencha todos os campos!', 'warning'); return; }
             
-            if (!estoque[epiCodigo]) {
-                estoque[epiCodigo] = {
-                    quantidade: 0,
-                    minimo: 10,
-                    ultimaMovimentacao: new Date().toISOString()
-                };
-            }
+            if (!estoque[epiCodigo]) { estoque[epiCodigo] = { quantidade: 0, minimo: 10, ultimaMovimentacao: new Date().toISOString() }; }
             
             const quantidadeAnterior = estoque[epiCodigo].quantidade;
             
-            if (tipoAjuste === 'entrada') {
-                estoque[epiCodigo].quantidade += quantidade;
-            } else if (tipoAjuste === 'saida') {
-                estoque[epiCodigo].quantidade -= quantidade;
-            } else { // ajuste
-                estoque[epiCodigo].quantidade = quantidade;
-            }
+            if (tipoAjuste === 'entrada') { estoque[epiCodigo].quantidade += quantidade; } 
+            else if (tipoAjuste === 'saida') { estoque[epiCodigo].quantidade -= quantidade; } 
+            else { estoque[epiCodigo].quantidade = quantidade; }
             
             estoque[epiCodigo].ultimaMovimentacao = new Date().toISOString();
             
-            // Registrar no histórico
             const ajuste = {
-                funcionario: 'SISTEMA',
-                epi: epiCodigo,
-                quantidade: quantidade,
+                funcionario: 'SISTEMA', epi: epiCodigo, quantidade: quantidade,
                 observacao: `${tipoAjuste.toUpperCase()}: ${motivo} (Anterior: ${quantidadeAnterior})`,
-                acao: 'ajuste_estoque',
-                sessao: 'AJUSTE' + Date.now(),
+                acao: 'ajuste_estoque', sessao: 'AJUSTE' + Date.now(),
                 data: new Date().toISOString().split('T')[0],
                 hora: new Date().toTimeString().split(' ')[0].substring(0, 5),
-                responsavel: currentUser || 'Sistema',
-                timestamp: new Date().toISOString()
+                responsavel: currentUser || 'Sistema', timestamp: new Date().toISOString()
             };
             
             historico.unshift(ajuste);
-            
             saveLocalData();
             updateAllTables();
             updateStatistics();
             closeModal('modalAjusteEstoque');
             showNotification('Estoque ajustado com sucesso!', 'success');
             
-            // Limpar formulário
             document.getElementById('epiAjuste').value = '';
             document.getElementById('quantidadeAjuste').value = '';
             document.getElementById('motivoAjuste').value = '';
             
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
         }
 
         // Sistema de Importação CSV
@@ -3435,19 +3234,11 @@
             
             const reader = new FileReader();
             reader.onload = function(e) {
-                const csv = e.target.result;
-                const results = Papa.parse(csv, {
-                    header: true,
-                    skipEmptyLines: true,
-                    dynamicTyping: true
-                });
-                
+                const results = Papa.parse(e.target.result, { header: true, skipEmptyLines: true, dynamicTyping: true });
                 if (results.data.length > 0) {
                     document.getElementById('csvData').textContent = JSON.stringify(results.data.slice(0, 5), null, 2);
                     document.getElementById('csvPreview').classList.remove('hidden');
                     document.getElementById('btnImportarCSV').disabled = false;
-                    
-                    // Armazenar dados para importação
                     window.csvImportData = results.data;
                 }
             };
@@ -3455,56 +3246,32 @@
         }
 
         function importarCSV() {
-            if (!window.csvImportData) {
-                showNotification('Nenhum arquivo selecionado!', 'error');
-                return;
-            }
+            if (!window.csvImportData) { showNotification('Nenhum arquivo selecionado!', 'error'); return; }
             
-            let importados = 0;
-            let erros = 0;
+            let importados = 0, erros = 0;
             
             window.csvImportData.forEach(row => {
-                try {
-                    const matricula = row.Matricula || row.matricula || row.MATRICULA || '';
-                    const nome = row.Nome || row.nome || row.NOME || '';
-                    const funcao = row.Funcao || row.funcao || row.FUNCAO || 'Operador';
-                    const escala = row.Escala || row.escala || row.ESCALA || '24HS';
-                    const equipamento = row.Equipamento || row.equipamento || row.EQUIPAMENTO || '';
-                    const supervisor = row.Supervisor || row.supervisor || row.SUPERVISOR || '';
-                    
-                    if (matricula && nome) {
-                        if (!funcionarios.find(f => f.matricula === matricula)) {
-                            funcionarios.push({
-                                matricula,
-                                nome,
-                                funcao,
-                                escala,
-                                equipamento,
-                                supervisor,
-                                status: 'Ativo',
-                                dataCadastro: new Date().toISOString()
-                            });
-                            importados++;
-                        }
-                    } else {
-                        erros++;
-                    }
-                } catch (error) {
-                    erros++;
-                }
+                const matricula = row.Matricula || row.matricula || '';
+                const nome = row.Nome || row.nome || '';
+                if (matricula && nome && !funcionarios.find(f => f.matricula === matricula)) {
+                    funcionarios.push({
+                        matricula, nome,
+                        funcao: row.Funcao || row.funcao || 'Operador',
+                        escala: row.Escala || row.escala || '24HS',
+                        equipamento: row.Equipamento || row.equipamento || '',
+                        supervisor: row.Supervisor || row.supervisor || '',
+                        status: 'Ativo', dataCadastro: new Date().toISOString()
+                    });
+                    importados++;
+                } else { erros++; }
             });
             
             saveLocalData();
             updateAllTables();
             updateFilters();
             closeModal('modalImportarCSV');
-            
-            showNotification(`Importação concluída! ${importados} funcionários importados, ${erros} erros.`, 
-                           importados > 0 ? 'success' : 'warning');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
+            showNotification(`Importação concluída! ${importados} importados, ${erros} erros.`, importados > 0 ? 'success' : 'warning');
+            if (navigator.onLine) { syncData(); }
         }
 
         // Atualização de Tabelas
@@ -3519,116 +3286,57 @@
 
         function updateTabelaFuncionarios() {
             const tbody = document.getElementById('funcionariosTableBody');
-            
             if (funcionarios.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                            Nenhum funcionário cadastrado
-                        </td>
-                    </tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhum funcionário cadastrado</td></tr>`;
                 return;
             }
-            
             tbody.innerHTML = funcionarios.map(f => `
                 <tr>
-                    <td>${f.matricula}</td>
-                    <td>${f.nome}</td>
-                    <td>${f.funcao}</td>
-                    <td>${f.escala}</td>
-                    <td>${f.equipamento || '-'}</td>
-                    <td>${f.supervisor || '-'}</td>
+                    <td>${f.matricula}</td><td>${f.nome}</td><td>${f.funcao}</td>
+                    <td>${f.escala}</td><td>${f.equipamento || '-'}</td><td>${f.supervisor || '-'}</td>
+                    <td><span class="badge badge-${f.status === 'Ativo' ? 'success' : 'secondary'}">${f.status}</span></td>
                     <td>
-                        <span class="badge badge-${f.status === 'Ativo' ? 'success' : f.status === 'Férias' ? 'warning' : 'secondary'}">
-                            ${f.status}
-                        </span>
+                        <button class="btn btn-sm" onclick="abrirModalFuncionario(true, '${f.matricula}')">Editar</button>
+                        <button class="btn btn-danger btn-sm" onclick="removerFuncionario('${f.matricula}')">Remover</button>
                     </td>
-                    <td>
-                        <button class="btn btn-sm" onclick="abrirModalFuncionario(true, '${f.matricula}')">
-                            Editar
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="removerFuncionario('${f.matricula}')">
-                            Remover
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+                </tr>`).join('');
         }
 
         function updateTabelaEPIs() {
             const tbody = document.getElementById('episTableBody');
-            
             if (epis.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                            Nenhum EPI cadastrado
-                        </td>
-                    </tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhum EPI cadastrado</td></tr>`;
                 return;
             }
-            
             tbody.innerHTML = epis.map(e => `
                 <tr>
-                    <td>${e.codigo}</td>
-                    <td>${e.nome}</td>
-                    <td>${e.categoria}</td>
-                    <td>${e.ca || '-'}</td>
-                    <td>${e.validadeCA ? formatarData(e.validadeCA) : '-'}</td>
+                    <td>${e.codigo}</td><td>${e.nome}</td><td>${e.categoria}</td>
+                    <td>${e.ca || '-'}</td><td>${e.validadeCA ? formatarData(e.validadeCA) : '-'}</td>
                     <td>${e.vidaUtil || '-'}</td>
                     <td>
-                        <button class="btn btn-sm" onclick="abrirModalEPI(true, '${e.codigo}')">
-                            Editar
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="removerEPI('${e.codigo}')">
-                            Remover
-                        </button>
+                        <button class="btn btn-sm" onclick="abrirModalEPI(true, '${e.codigo}')">Editar</button>
+                        <button class="btn btn-danger btn-sm" onclick="removerEPI('${e.codigo}')">Remover</button>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`).join('');
         }
 
         function updateTabelaEstoque() {
             const tbody = document.getElementById('estoqueTableBody');
-            
             if (epis.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                            Nenhum item no estoque
-                        </td>
-                    </tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhum item no estoque</td></tr>`;
                 return;
             }
-            
             tbody.innerHTML = epis.map(e => {
                 const est = estoque[e.codigo] || { quantidade: 0, minimo: 10 };
-                const status = est.quantidade <= 0 ? 'danger' : 
-                              est.quantidade <= est.minimo ? 'warning' : 'success';
-                
+                const statusClass = est.quantidade <= 0 ? 'danger' : est.quantidade <= est.minimo ? 'warning' : 'success';
+                const statusText = est.quantidade <= 0 ? 'Zerado' : est.quantidade <= est.minimo ? 'Baixo' : 'Normal';
                 return `
                     <tr>
-                        <td>${e.nome}</td>
-                        <td>${e.categoria}</td>
-                        <td>${est.quantidade}</td>
-                        <td>${est.minimo}</td>
-                        <td>
-                            <span class="badge badge-${status}">
-                                ${est.quantidade <= 0 ? 'Zerado' : 
-                                  est.quantidade <= est.minimo ? 'Baixo' : 'Normal'}
-                            </span>
-                        </td>
+                        <td>${e.nome}</td><td>${e.categoria}</td><td>${est.quantidade}</td><td>${est.minimo}</td>
+                        <td><span class="badge badge-${statusClass}">${statusText}</span></td>
                         <td>${est.ultimaMovimentacao ? formatarDataHora(est.ultimaMovimentacao) : '-'}</td>
-                        <td>
-                            <button class="btn btn-sm" onclick="abrirModalAjusteEstoque()">
-                                Ajustar
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                        <td><button class="btn btn-sm" onclick="abrirModalAjusteEstoque()">Ajustar</button></td>
+                    </tr>`;
             }).join('');
         }
 
@@ -3636,80 +3344,34 @@
             const funcionario = funcionarios.find(f => f.matricula === matricula);
             if (!funcionario) return;
             
-            // Buscar histórico do funcionário
             const historicoFunc = historico.filter(h => h.funcionario === matricula);
             
             let html = `
                 <div style="margin-bottom: 1.5rem;">
                     <h4>${funcionario.nome}</h4>
-                    <p><strong>Matrícula:</strong> ${funcionario.matricula}</p>
-                    <p><strong>Função:</strong> ${funcionario.funcao} | <strong>Equipamento:</strong> ${funcionario.equipamento || 'N/A'}</p>
+                    <p><strong>Matrícula:</strong> ${funcionario.matricula} | <strong>Função:</strong> ${funcionario.funcao}</p>
                 </div>
-                
-                <div class="stats-grid" style="margin-bottom: 1.5rem;">
-                    <div class="stat-card">
-                        <div class="stat-value">${historicoFunc.filter(h => h.acao === 'entrega' || h.acao === 'primeira_entrega').length}</div>
-                        <div class="stat-label">Entregas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${historicoFunc.filter(h => h.acao === 'devolucao').length}</div>
-                        <div class="stat-label">Devoluções</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${historicoFunc.filter(h => h.acao === 'troca').length}</div>
-                        <div class="stat-label">Trocas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${historicoFunc.filter(h => h.observacao && h.observacao.includes('NÃO')).length}</div>
-                        <div class="stat-label">Não Devolveu</div>
-                    </div>
-                </div>
-            `;
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">${historicoFunc.filter(h => ['entrega', 'primeira_entrega'].includes(h.acao)).length}</div><div class="stat-label">Entregas</div></div>
+                    <div class="stat-card"><div class="stat-value">${historicoFunc.filter(h => h.acao === 'devolucao').length}</div><div class="stat-label">Devoluções</div></div>
+                    <div class="stat-card"><div class="stat-value">${historicoFunc.filter(h => h.acao === 'troca').length}</div><div class="stat-label">Trocas</div></div>
+                    <div class="stat-card"><div class="stat-value">${historicoFunc.filter(h => h.observacao && h.observacao.includes('NÃO')).length}</div><div class="stat-label">Não Devolveu</div></div>
+                </div>`;
             
             if (historicoFunc.length === 0) {
-                html += `
-                    <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                        <p>Nenhuma movimentação encontrada para este funcionário</p>
-                    </div>
-                `;
+                html += `<div style="text-align: center; padding: 2rem; color: var(--gray-500);"><p>Nenhuma movimentação encontrada</p></div>`;
             } else {
-                html += `
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>EPI</th>
-                                    <th>Ação</th>
-                                    <th>Qtd</th>
-                                    <th>Responsável</th>
-                                    <th>Observações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                html += `<div class="table-container"><table class="data-table"><thead><tr><th>Data</th><th>EPI</th><th>Ação</th><th>Qtd</th><th>Responsável</th><th>Observações</th></tr></thead><tbody>
                                 ${historicoFunc.map(h => {
                                     const epi = epis.find(e => e.codigo === h.epi);
-                                    return `
-                                        <tr>
-                                            <td>${formatarData(h.data)}</td>
-                                            <td>${epi ? epi.nome : h.epi}</td>
-                                            <td>
-                                                <span class="badge badge-${h.acao === 'entrega' || h.acao === 'primeira_entrega' ? 'success' : 
-                                                                          h.acao === 'devolucao' ? 'warning' : 
-                                                                          h.acao === 'troca' ? 'primary' : 'secondary'}">
-                                                    ${h.acao.replace('_', ' ').toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td>${h.quantidade}</td>
-                                            <td>${h.responsavel}</td>
-                                            <td>${h.observacao || '-'}</td>
-                                        </tr>
-                                    `;
+                                    const acaoClass = h.acao === 'entrega' || h.acao === 'primeira_entrega' ? 'success' : h.acao === 'devolucao' ? 'warning' : 'primary';
+                                    return `<tr>
+                                                <td>${formatarData(h.data)}</td><td>${epi ? epi.nome : h.epi}</td>
+                                                <td><span class="badge badge-${acaoClass}">${h.acao.replace('_', ' ').toUpperCase()}</span></td>
+                                                <td>${h.quantidade}</td><td>${h.responsavel}</td><td>${h.observacao || '-'}</td>
+                                            </tr>`;
                                 }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
+                            </tbody></table></div>`;
             }
             
             document.getElementById('historicoFuncionarioContent').innerHTML = html;
@@ -3719,85 +3381,40 @@
 
         function exportarHistoricoFuncionario() {
             if (!window.currentFuncionarioHistorico) return;
-            
             const funcionario = funcionarios.find(f => f.matricula === window.currentFuncionarioHistorico[0]?.funcionario);
             const dados = window.currentFuncionarioHistorico.map(h => {
                 const epi = epis.find(e => e.codigo === h.epi);
                 return {
-                    'Data': formatarData(h.data),
-                    'Hora': h.hora,
-                    'EPI': epi ? epi.nome : h.epi,
-                    'Ação': h.acao.replace('_', ' ').toUpperCase(),
-                    'Quantidade': h.quantidade,
-                    'Responsável': h.responsavel,
-                    'Observações': h.observacao || ''
+                    'Data': formatarData(h.data), 'Hora': h.hora, 'EPI': epi ? epi.nome : h.epi,
+                    'Ação': h.acao.replace('_', ' ').toUpperCase(), 'Quantidade': h.quantidade,
+                    'Responsável': h.responsavel, 'Observações': h.observacao || ''
                 };
             });
-            
-            const ws = XLSX.utils.json_to_sheet(dados);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
-            
-            const arquivo = `Historico_${funcionario?.nome || 'Funcionario'}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}.xlsx`;
-            XLSX.writeFile(wb, arquivo);
-            
+            exportarExcel(dados, `Historico_${funcionario?.nome || 'Funcionario'}`);
             showNotification('Histórico exportado com sucesso!', 'success');
         }
 
         function updateTabelaMovimentacoes() {
             const tbody = document.getElementById('movimentacoesTableBody');
-            
             if (historico.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                            Nenhuma movimentação registrada
-                        </td>
-                    </tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhuma movimentação registrada</td></tr>`;
                 return;
             }
-            
-            // Criar movimentações com dados de estoque
-            const movimentacoes = [];
-            historico.slice(0, 200).forEach(item => {
+            const movimentacoes = historico.slice(0, 200).map(item => {
                 const epi = epis.find(e => e.codigo === item.epi);
                 const estoqueAtual = estoque[item.epi]?.quantidade || 0;
-                
-                // Calcular estoque anterior (simulado)
                 let estoqueAnterior = estoqueAtual;
-                if (item.acao === 'entrega' || item.acao === 'primeira_entrega' || item.acao === 'troca') {
-                    estoqueAnterior = estoqueAtual + item.quantidade;
-                } else if (item.acao === 'devolucao') {
-                    estoqueAnterior = estoqueAtual - item.quantidade;
-                }
-                
-                movimentacoes.push({
-                    ...item,
-                    nomeEPI: epi ? epi.nome : item.epi,
-                    estoqueAnterior: estoqueAnterior,
-                    estoqueAtual: estoqueAtual
-                });
-            });
-            
-            tbody.innerHTML = movimentacoes.map(m => `
-                <tr>
-                    <td>${formatarData(m.data)} ${m.hora}</td>
-                    <td>${m.nomeEPI}</td>
-                    <td>
-                        <span class="badge badge-${m.acao === 'entrega' || m.acao === 'primeira_entrega' ? 'success' : 
-                                                  m.acao === 'devolucao' ? 'warning' : 
-                                                  m.acao === 'troca' ? 'primary' : 'secondary'}">
-                            ${m.acao.replace('_', ' ').toUpperCase()}
-                        </span>
-                    </td>
-                    <td>${m.quantidade}</td>
-                    <td>${m.estoqueAnterior}</td>
-                    <td>${m.estoqueAtual}</td>
-                    <td>${m.responsavel}</td>
-                    <td>${m.observacao || '-'}</td>
-                </tr>
-            `).join('');
+                if (['entrega', 'primeira_entrega', 'troca'].includes(item.acao)) { estoqueAnterior = estoqueAtual + item.quantidade; } 
+                else if (item.acao === 'devolucao') { estoqueAnterior = estoqueAtual - item.quantidade; }
+                const acaoClass = item.acao === 'entrega' || item.acao === 'primeira_entrega' ? 'success' : item.acao === 'devolucao' ? 'warning' : 'primary';
+                return `<tr>
+                            <td>${formatarData(item.data)} ${item.hora}</td><td>${epi ? epi.nome : item.epi}</td>
+                            <td><span class="badge badge-${acaoClass}">${item.acao.replace('_', ' ').toUpperCase()}</span></td>
+                            <td>${item.quantidade}</td><td>${estoqueAnterior}</td><td>${estoqueAtual}</td>
+                            <td>${item.responsavel}</td><td>${item.observacao || '-'}</td>
+                        </tr>`;
+            }).join('');
+            tbody.innerHTML = movimentacoes;
         }
 
         function filtrarMovimentacoes() {
@@ -3806,21 +3423,13 @@
             const epi = document.getElementById('epiMovimentacao').value.toLowerCase();
             const tipo = document.getElementById('tipoMovimentacao').value;
             
-            const rows = document.querySelectorAll('#movimentacoesTableBody tr');
-            
-            rows.forEach(row => {
-                const data = row.children[0]?.textContent.split(' ')[0] || '';
+            document.querySelectorAll('#movimentacoesTableBody tr').forEach(row => {
+                const dataFormatted = (row.children[0]?.textContent.split(' ')[0] || '').split('/').reverse().join('-');
                 const epiText = row.children[1]?.textContent.toLowerCase() || '';
                 const tipoText = row.children[2]?.textContent.toLowerCase() || '';
                 
-                const dataFormatted = data.split('/').reverse().join('-');
-                
-                const shouldShow = 
-                    (!dataInicial || dataFormatted >= dataInicial) &&
-                    (!dataFinal || dataFormatted <= dataFinal) &&
-                    (!epi || epiText.includes(epi)) &&
-                    (!tipo || tipoText.includes(tipo));
-                
+                const shouldShow = (!dataInicial || dataFormatted >= dataInicial) && (!dataFinal || dataFormatted <= dataFinal) &&
+                                   (!epi || epiText.includes(epi)) && (!tipo || tipoText.includes(tipo));
                 row.style.display = shouldShow ? '' : 'none';
             });
         }
@@ -3830,18 +3439,13 @@
             document.querySelectorAll('#movimentacoesTableBody tr').forEach(row => {
                 if (row.style.display !== 'none' && row.children.length > 1) {
                     dados.push({
-                        'Data/Hora': row.children[0].textContent,
-                        'EPI': row.children[1].textContent,
-                        'Tipo': row.children[2].textContent,
-                        'Quantidade': row.children[3].textContent,
-                        'Estoque Anterior': row.children[4].textContent,
-                        'Estoque Atual': row.children[5].textContent,
-                        'Responsável': row.children[6].textContent,
-                        'Observações': row.children[7].textContent
+                        'Data/Hora': row.children[0].textContent, 'EPI': row.children[1].textContent,
+                        'Tipo': row.children[2].textContent, 'Quantidade': row.children[3].textContent,
+                        'Estoque Anterior': row.children[4].textContent, 'Estoque Atual': row.children[5].textContent,
+                        'Responsável': row.children[6].textContent, 'Observações': row.children[7].textContent
                     });
                 }
             });
-            
             exportarExcel(dados, 'Movimentacoes_Estoque');
         }
 
@@ -3853,98 +3457,39 @@
                 updateAllTables();
                 updateStatistics();
                 showNotification('Movimentações limpas!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
+                if (navigator.onLine) { syncData(); }
             }
         }
 
         function updateTabelaHistoricoDistribuicao() {
             const tbody = document.getElementById('historicoDistribuicaoBody');
-            
             if (distribuicoes.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                            Nenhuma distribuição registrada
-                        </td>
-                    </tr>
-                `;
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhuma distribuição registrada</td></tr>`;
                 return;
             }
-            
             tbody.innerHTML = distribuicoes.map(d => `
                 <tr>
-                    <td>${d.id}</td>
-                    <td>${formatarData(d.data)} ${d.hora}</td>
-                    <td>${d.responsavel}</td>
-                    <td>${d.funcionarios.length}</td>
-                    <td>${d.totalEntregas + d.totalDevolucoes + d.totalTrocas}</td>
-                    <td>
-                        <button class="btn btn-sm" onclick="verDetalhesSessao('${d.id}')">
-                            Ver Detalhes
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+                    <td>${d.id}</td><td>${formatarData(d.data)} ${d.hora}</td><td>${d.responsavel}</td>
+                    <td>${d.funcionarios.length}</td><td>${d.totalEntregas + d.totalDevolucoes + d.totalTrocas}</td>
+                    <td><button class="btn btn-sm" onclick="verDetalhesSessao('${d.id}')">Ver Detalhes</button></td>
+                </tr>`).join('');
         }
 
         function updateTabelaUsuarios() {
             const tbody = document.getElementById('usuariosTableBody');
-            
-            // Combinar usuários padrão e personalizados
-            const allUsers = [];
-            
-            Object.entries(DEFAULT_USERS).forEach(([username, data]) => {
-                allUsers.push({
-                    username,
-                    name: data.name,
-                    level: data.level,
-                    active: data.active,
-                    lastAccess: data.lastAccess,
-                    isDefault: true
-                });
-            });
-            
-            Object.entries(usuarios).forEach(([username, data]) => {
-                allUsers.push({
-                    username,
-                    name: data.name,
-                    level: data.level,
-                    active: data.active,
-                    lastAccess: data.lastAccess,
-                    isDefault: false
-                });
-            });
+            const allUsers = [
+                ...Object.entries(DEFAULT_USERS).map(([username, data]) => ({ ...data, username, isDefault: true })),
+                ...Object.entries(usuarios).map(([username, data]) => ({ ...data, username, isDefault: false }))
+            ];
             
             tbody.innerHTML = allUsers.map(u => `
                 <tr>
-                    <td>${u.username}</td>
-                    <td>${u.name}</td>
-                    <td>
-                        <span class="badge badge-${u.level === 'admin' ? 'primary' : 'secondary'}">
-                            ${u.level === 'admin' ? 'Administrador' : 'Usuário'}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge badge-${u.active ? 'success' : 'danger'}">
-                            ${u.active ? 'Ativo' : 'Inativo'}
-                        </span>
-                    </td>
+                    <td>${u.username}</td><td>${u.name}</td>
+                    <td><span class="badge badge-${u.level === 'admin' ? 'primary' : 'secondary'}">${u.level}</span></td>
+                    <td><span class="badge badge-${u.active ? 'success' : 'danger'}">${u.active ? 'Ativo' : 'Inativo'}</span></td>
                     <td>${u.lastAccess ? formatarDataHora(u.lastAccess) : 'Nunca'}</td>
-                    <td>
-                        ${!u.isDefault ? `
-                            <button class="btn btn-sm" onclick="editarUsuario('${u.username}')">
-                                Editar
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="removerUsuario('${u.username}')">
-                                Remover
-                            </button>
-                        ` : '<em>Usuário do sistema</em>'}
-                    </td>
-                </tr>
-            `).join('');
+                    <td>${!u.isDefault ? `<button class="btn btn-sm" onclick="editarUsuario('${u.username}')">Editar</button> <button class="btn btn-danger btn-sm" onclick="removerUsuario('${u.username}')">Remover</button>` : '<em>Usuário do sistema</em>'}</td>
+                </tr>`).join('');
         }
 
         // Gestão de Usuários
@@ -3963,38 +3508,20 @@
             const level = document.getElementById('novoNivelAcesso').value;
             const isEdit = document.getElementById('novoUsuario').disabled;
             
-            if (!username || !name || !password) {
-                showNotification('Preencha todos os campos!', 'warning');
-                return;
-            }
+            if (!username || !name || !password) { showNotification('Preencha todos os campos!', 'warning'); return; }
+            if (!isEdit && (DEFAULT_USERS[username] || usuarios[username])) { showNotification('Usuário já existe!', 'error'); return; }
             
-            if (!isEdit && (DEFAULT_USERS[username] || usuarios[username])) {
-                showNotification('Usuário já existe!', 'error');
-                return;
-            }
-            
-            usuarios[username] = {
-                name,
-                password,
-                level,
-                active: true,
-                createdAt: usuarios[username]?.createdAt || new Date().toISOString(),
-                lastAccess: usuarios[username]?.lastAccess || null
-            };
+            usuarios[username] = { name, password, level, active: true, createdAt: usuarios[username]?.createdAt || new Date().toISOString(), lastAccess: usuarios[username]?.lastAccess || null };
             
             saveLocalData();
             updateTabelaUsuarios();
             closeModal('modalNovoUsuario');
             
-            // Resetar modal
             document.getElementById('novoUsuario').disabled = false;
             document.querySelector('#modalNovoUsuario .modal-title').textContent = 'Novo Usuário';
             
             showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
+            if (navigator.onLine) { syncData(); }
         }
 
         function removerUsuario(username) {
@@ -4003,53 +3530,31 @@
                 saveLocalData();
                 updateTabelaUsuarios();
                 showNotification('Usuário removido!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
+                if (navigator.onLine) { syncData(); }
             }
         }
 
         // Estatísticas
         function updateStatistics() {
-            // Funcionários
-            const funcionariosAtivos = funcionarios.filter(f => f.status === 'Ativo').length;
-            const funcionariosInativos = funcionarios.filter(f => f.status !== 'Ativo').length;
-            
             document.getElementById('totalFuncionarios').textContent = funcionarios.length;
-            document.getElementById('totalFuncionariosAtivos').textContent = funcionariosAtivos;
-            document.getElementById('funcionariosInativos').textContent = funcionariosInativos;
-            
-            // EPIs
-            const categorias = [...new Set(epis.map(e => e.categoria))].length;
-            const episVencidos = epis.filter(e => {
-                if (!e.validadeCA) return false;
-                return new Date(e.validadeCA) < new Date();
-            }).length;
+            document.getElementById('totalFuncionariosAtivos').textContent = funcionarios.filter(f => f.status === 'Ativo').length;
+            document.getElementById('funcionariosInativos').textContent = funcionarios.filter(f => f.status !== 'Ativo').length;
             
             document.getElementById('totalEPIs').textContent = epis.length;
-            document.getElementById('episVencidos').textContent = episVencidos;
-            document.getElementById('categorias').textContent = categorias;
+            document.getElementById('episVencidos').textContent = epis.filter(e => e.validadeCA && new Date(e.validadeCA) < new Date()).length;
+            document.getElementById('categorias').textContent = [...new Set(epis.map(e => e.categoria))].length;
             
-            // Estoque
-            let totalEstoque = 0;
-            let itensCriticos = 0;
-            
-            Object.entries(estoque).forEach(([codigo, dados]) => {
+            let totalEstoque = 0, itensCriticos = 0;
+            Object.values(estoque).forEach(dados => {
                 totalEstoque += dados.quantidade;
-                if (dados.quantidade <= dados.minimo) {
-                    itensCriticos++;
-                }
+                if (dados.quantidade <= dados.minimo) itensCriticos++;
             });
-            
             document.getElementById('totalEstoque').textContent = totalEstoque;
             document.getElementById('itensCriticos').textContent = itensCriticos;
             
-            // Movimentações de hoje
             const hoje = new Date().toISOString().split('T')[0];
-            let entregasHoje = 0;
-            let devolucoesHoje = 0;
-            let trocasHoje = 0;
+            let entregasHoje = 0, devolucoesHoje = 0, trocasHoje = 0, consumoMensal = 0;
+            const mesAtual = new Date().getMonth(), anoAtual = new Date().getFullYear();
             
             historico.forEach(item => {
                 if (item.data === hoje) {
@@ -4057,42 +3562,29 @@
                     if (item.acao === 'devolucao') devolucoesHoje += item.quantidade;
                     if (item.acao === 'troca') trocasHoje += item.quantidade;
                 }
+                const dataItem = new Date(item.data);
+                if (dataItem.getMonth() === mesAtual && dataItem.getFullYear() === anoAtual && item.acao === 'entrega') {
+                    consumoMensal += item.quantidade;
+                }
             });
             
             document.getElementById('entregasHoje').textContent = entregasHoje;
             document.getElementById('devolucoesHoje').textContent = devolucoesHoje;
             document.getElementById('trocasHoje').textContent = trocasHoje;
-            
-            // Consumo mensal
-            const mesAtual = new Date().getMonth();
-            const anoAtual = new Date().getFullYear();
-            let consumoMensal = 0;
-            
-            historico.forEach(item => {
-                const data = new Date(item.data);
-                if (data.getMonth() === mesAtual && data.getFullYear() === anoAtual && item.acao === 'entrega') {
-                    consumoMensal += item.quantidade;
-                }
-            });
-            
             document.getElementById('consumoMensal').textContent = consumoMensal;
         }
 
         function updateFilters() {
-            // Filtro de funções
             const funcoes = [...new Set(funcionarios.map(f => f.funcao))].sort();
             const filtroFuncao = document.getElementById('filtroFuncao');
             if (filtroFuncao) {
-                filtroFuncao.innerHTML = '<option value="">Todas as funções</option>' +
-                    funcoes.map(f => `<option value="${f}">${f}</option>`).join('');
+                filtroFuncao.innerHTML = '<option value="">Todas as funções</option>' + funcoes.map(f => `<option value="${f}">${f}</option>`).join('');
             }
             
-            // Filtro de categorias
             const categorias = [...new Set(epis.map(e => e.categoria))].sort();
             const filtroCategoria = document.getElementById('filtroCategoria');
             if (filtroCategoria) {
-                filtroCategoria.innerHTML = '<option value="">Todas as categorias</option>' +
-                    categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+                filtroCategoria.innerHTML = '<option value="">Todas as categorias</option>' + categorias.map(c => `<option value="${c}">${c}</option>`).join('');
             }
         }
 
@@ -4102,14 +3594,9 @@
             const funcao = document.getElementById('filtroFuncao').value;
             const status = document.getElementById('filtroStatus').value;
             
-            const rows = document.querySelectorAll('#funcionariosTableBody tr');
-            
-            rows.forEach(row => {
+            document.querySelectorAll('#funcionariosTableBody tr').forEach(row => {
                 const texto = row.textContent.toLowerCase();
-                const shouldShow = texto.includes(busca) &&
-                    (!funcao || row.children[2]?.textContent === funcao) &&
-                    (!status || row.children[6]?.textContent.includes(status));
-                
+                const shouldShow = texto.includes(busca) && (!funcao || row.children[2]?.textContent === funcao) && (!status || row.children[6]?.textContent.includes(status));
                 row.style.display = shouldShow ? '' : 'none';
             });
         }
@@ -4117,50 +3604,17 @@
         function filtrarEPIs() {
             const busca = document.getElementById('buscarEPI').value.toLowerCase();
             const categoria = document.getElementById('filtroCategoria').value;
-            
-            const rows = document.querySelectorAll('#episTableBody tr');
-            
-            rows.forEach(row => {
+            document.querySelectorAll('#episTableBody tr').forEach(row => {
                 const texto = row.textContent.toLowerCase();
-                const shouldShow = texto.includes(busca) &&
-                    (!categoria || row.children[2]?.textContent === categoria);
-                
+                const shouldShow = texto.includes(busca) && (!categoria || row.children[2]?.textContent === categoria);
                 row.style.display = shouldShow ? '' : 'none';
             });
         }
 
         function filtrarEstoque() {
             const busca = document.getElementById('buscarEstoque').value.toLowerCase();
-            const rows = document.querySelectorAll('#estoqueTableBody tr');
-            
-            rows.forEach(row => {
-                const texto = row.textContent.toLowerCase();
-                row.style.display = texto.includes(busca) ? '' : 'none';
-            });
-        }
-
-        function filtrarHistorico() {
-            const dataInicial = document.getElementById('dataInicialHistorico').value;
-            const dataFinal = document.getElementById('dataFinalHistorico').value;
-            const funcionario = document.getElementById('funcionarioHistorico').value.toLowerCase();
-            const epi = document.getElementById('epiHistorico').value.toLowerCase();
-            
-            const rows = document.querySelectorAll('#historicoTableBody tr');
-            
-            rows.forEach(row => {
-                const data = row.children[1]?.textContent.split(' ')[0] || '';
-                const funcText = row.children[2]?.textContent.toLowerCase() || '';
-                const epiText = row.children[3]?.textContent.toLowerCase() || '';
-                
-                const dataFormatted = data.split('/').reverse().join('-');
-                
-                const shouldShow = 
-                    (!dataInicial || dataFormatted >= dataInicial) &&
-                    (!dataFinal || dataFormatted <= dataFinal) &&
-                    (!funcionario || funcText.includes(funcionario)) &&
-                    (!epi || epiText.includes(epi));
-                
-                row.style.display = shouldShow ? '' : 'none';
+            document.querySelectorAll('#estoqueTableBody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(busca) ? '' : 'none';
             });
         }
 
@@ -4169,171 +3623,56 @@
             const dataFinal = document.getElementById('dataFinalDist').value;
             const responsavel = document.getElementById('responsavelDist').value.toLowerCase();
             
-            const rows = document.querySelectorAll('#historicoDistribuicaoBody tr');
-            
-            rows.forEach(row => {
-                const data = row.children[1]?.textContent.split(' ')[0] || '';
+            document.querySelectorAll('#historicoDistribuicaoBody tr').forEach(row => {
+                const dataFormatted = (row.children[1]?.textContent.split(' ')[0] || '').split('/').reverse().join('-');
                 const respText = row.children[2]?.textContent.toLowerCase() || '';
-                
-                const dataFormatted = data.split('/').reverse().join('-');
-                
-                const shouldShow = 
-                    (!dataInicial || dataFormatted >= dataInicial) &&
-                    (!dataFinal || dataFormatted <= dataFinal) &&
-                    (!responsavel || respText.includes(responsavel));
-                
+                const shouldShow = (!dataInicial || dataFormatted >= dataInicial) && (!dataFinal || dataFormatted <= dataFinal) && (!responsavel || respText.includes(responsavel));
                 row.style.display = shouldShow ? '' : 'none';
             });
         }
 
         // Funções de Exportação
-        function exportarFuncionarios() {
-            const dados = funcionarios.map(f => ({
-                'Matrícula': f.matricula,
-                'Nome': f.nome,
-                'Função': f.funcao,
-                'Escala': f.escala,
-                'Equipamento': f.equipamento || '',
-                'Supervisor': f.supervisor || '',
-                'Status': f.status
-            }));
-            
-            exportarExcel(dados, 'Funcionários');
-        }
-
-        function exportarEPIs() {
-            const dados = epis.map(e => ({
-                'Código': e.codigo,
-                'Nome': e.nome,
-                'Categoria': e.categoria,
-                'CA': e.ca || '',
-                'Validade CA': e.validadeCA || '',
-                'Vida Útil': e.vidaUtil || ''
-            }));
-            
-            exportarExcel(dados, 'EPIs');
-        }
-
+        function exportarFuncionarios() { exportarExcel(funcionarios.map(f => ({ 'Matrícula': f.matricula, 'Nome': f.nome, 'Função': f.funcao, 'Escala': f.escala, 'Equipamento': f.equipamento || '', 'Supervisor': f.supervisor || '', 'Status': f.status })), 'Funcionários'); }
+        function exportarEPIs() { exportarExcel(epis.map(e => ({ 'Código': e.codigo, 'Nome': e.nome, 'Categoria': e.categoria, 'CA': e.ca || '', 'Validade CA': e.validadeCA || '', 'Vida Útil': e.vidaUtil || '' })), 'EPIs'); }
         function exportarEstoque() {
             const dados = epis.map(e => {
                 const est = estoque[e.codigo] || { quantidade: 0, minimo: 10 };
-                return {
-                    'Código': e.codigo,
-                    'Nome': e.nome,
-                    'Categoria': e.categoria,
-                    'Quantidade': est.quantidade,
-                    'Mínimo': est.minimo,
-                    'Status': est.quantidade <= 0 ? 'Zerado' : 
-                             est.quantidade <= est.minimo ? 'Baixo' : 'Normal'
-                };
+                return { 'Código': e.codigo, 'Nome': e.nome, 'Categoria': e.categoria, 'Quantidade': est.quantidade, 'Mínimo': est.minimo, 'Status': est.quantidade <= 0 ? 'Zerado' : (est.quantidade <= est.minimo ? 'Baixo' : 'Normal') };
             });
-            
             exportarExcel(dados, 'Estoque');
         }
-
-        function exportarHistorico() {
-            const dados = historico.map(item => {
-                const funcionario = funcionarios.find(f => f.matricula === item.funcionario);
-                const epi = epis.find(e => e.codigo === item.epi);
-                
-                return {
-                    'Sessão': item.sessao,
-                    'Data': formatarData(item.data),
-                    'Hora': item.hora,
-                    'Funcionário': funcionario?.nome || item.funcionario,
-                    'EPI': epi?.nome || item.epi,
-                    'Ação': item.acao.toUpperCase(),
-                    'Quantidade': item.quantidade,
-                    'Responsável': item.responsavel,
-                    'Observações': item.observacao || ''
-                };
-            });
-            
-            exportarExcel(dados, 'Histórico');
-        }
-
-        function exportarHistoricoDistribuicao() {
-            const dados = distribuicoes.map(d => ({
-                'Sessão': d.id,
-                'Data': formatarData(d.data),
-                'Hora': d.hora,
-                'Responsável': d.responsavel,
-                'Funcionários': d.funcionarios.length,
-                'Entregas': d.totalEntregas,
-                'Devoluções': d.totalDevolucoes,
-                'Trocas': d.totalTrocas
-            }));
-            
-            exportarExcel(dados, 'Histórico_Distribuição');
-        }
+        function exportarHistoricoDistribuicao() { exportarExcel(distribuicoes.map(d => ({ 'Sessão': d.id, 'Data': formatarData(d.data), 'Hora': d.hora, 'Responsável': d.responsavel, 'Funcionários': d.funcionarios.length, 'Entregas': d.totalEntregas, 'Devoluções': d.totalDevolucoes, 'Trocas': d.totalTrocas })), 'Histórico_Distribuição'); }
 
         function exportarExcel(dados, nomeArquivo) {
             const ws = XLSX.utils.json_to_sheet(dados);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, nomeArquivo);
-            
-            const arquivo = `${nomeArquivo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}.xlsx`;
-            XLSX.writeFile(wb, arquivo);
-            
+            XLSX.writeFile(wb, `${nomeArquivo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}.xlsx`);
             showNotification(`${nomeArquivo} exportado com sucesso!`, 'success');
         }
 
         // Funções de Interface
         function switchTab(tabName) {
-            // Verificar permissões
             const tab = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
             if (tab && tab.classList.contains('disabled')) {
                 showNotification('Acesso restrito para seu nível de usuário', 'warning');
                 return;
             }
             
-            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-            const button = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
-            const tabContent = document.getElementById(tabName + '-tab');
-
-            if (button) button.classList.add('active');
-            if (tabContent) tabContent.classList.add('active');
-            
-            // Atualizar dados da aba específica
-            switch(tabName) {
-                case 'distribuicao':
-                    updateEmployeeRecords();
-                    break;
-                case 'funcionarios':
-                case 'epis':
-                case 'estoque':
-                case 'movimentacoes':
-                case 'historico-distribuicao':
-                    updateAllTables();
-                    updateStatistics();
-                    break;
-                case 'relatorios':
-                    updateStatistics();
-                    break;
-                case 'configuracoes':
-                    updateTabelaUsuarios();
-                    break;
-            }
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`)?.classList.add('active');
+            document.getElementById(tabName + '-tab')?.classList.add('active');
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
-            document.getElementById('employeeResults').classList.add('hidden');
-        }
+        function closeModal(modalId) { document.getElementById(modalId).classList.remove('show'); }
 
         function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.textContent = message;
-            
             document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.animation = 'slideOutRight 0.3s ease-in';
-                setTimeout(() => notification.remove(), 300);
-            }, 4000);
+            setTimeout(() => { notification.remove(); }, 4000);
         }
 
         // Funções Utilitárias
@@ -4344,22 +3683,6 @@
             
             document.getElementById('dataOperacao').value = hoje;
             document.getElementById('horaOperacao').value = horaAtual;
-            
-            // Inicializar campos de relatório
-            if (document.getElementById('periodoInicial')) {
-                document.getElementById('periodoInicial').value = hoje;
-                document.getElementById('periodoFinal').value = hoje;
-            }
-            
-            if (document.getElementById('dataInicialMov')) {
-                document.getElementById('dataInicialMov').value = hoje;
-                document.getElementById('dataFinalMov').value = hoje;
-            }
-            
-            if (document.getElementById('dataInicialDist')) {
-                document.getElementById('dataInicialDist').value = hoje;
-                document.getElementById('dataFinalDist').value = hoje;
-            }
         }
 
         function formatarData(dataISO) {
@@ -4371,37 +3694,14 @@
         function formatarDataHora(isoString) {
             if (!isoString) return '-';
             const data = new Date(isoString);
-            return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}`;
+            return data.toLocaleString('pt-BR', { hour12: false });
         }
 
         // Configurações
-        function testarConexaoGitHub() {
-            showNotification('Testando conexão...', 'info');
-            setTimeout(() => {
-                showNotification('Conexão testada com sucesso!', 'success');
-            }, 2000);
-        }
-
-        function salvarConfigGitHub() {
-            const token = document.getElementById('githubToken').value;
-            
-            if (token) {
-                GITHUB_CONFIG.token = token;
-                configuracoes.githubToken = token;
-                saveLocalData();
-                showNotification('Configurações do GitHub salvas!', 'success');
-            }
-        }
-
         function salvarConfigGerais() {
-            const nomeEmpresa = document.getElementById('nomeEmpresa').value;
-            const autoSave = document.getElementById('autoSaveInterval').value;
-            const backup = document.getElementById('backupAutomatico').value;
-            
-            configuracoes.nomeEmpresa = nomeEmpresa;
-            configuracoes.autoSaveInterval = parseInt(autoSave);
-            configuracoes.backupAutomatico = backup === 'true';
-            
+            configuracoes.nomeEmpresa = document.getElementById('nomeEmpresa').value;
+            configuracoes.autoSaveInterval = parseInt(document.getElementById('autoSaveInterval').value);
+            configuracoes.backupAutomatico = document.getElementById('backupAutomatico').value === 'true';
             saveLocalData();
             showNotification('Configurações salvas!', 'success');
         }
@@ -4419,103 +3719,28 @@
             const distribuicao = distribuicoes.find(d => d.id === sessionId);
             if (!distribuicao) return;
             
-            // Buscar itens detalhados
-            const itensDetalhados = distribuicao.itensDetalhados || [];
+            let html = `<div style="margin-bottom: 1.5rem;"><h4>Sessão: ${distribuicao.id}</h4><p><strong>Data:</strong> ${formatarData(distribuicao.data)} ${distribuicao.hora}</p><p><strong>Responsável:</strong> ${distribuicao.responsavel}</p></div>
+                        <h5 style="margin-bottom: 1rem;">Funcionários e EPIs:</h5>`;
             
-            let html = `
-                <div style="margin-bottom: 1.5rem;">
-                    <h4>Sessão: ${distribuicao.id}</h4>
-                    <p><strong>Data:</strong> ${formatarData(distribuicao.data)} ${distribuicao.hora}</p>
-                    <p><strong>Responsável:</strong> ${distribuicao.responsavel}</p>
-                </div>
-                
-                <div class="stats-grid" style="margin-bottom: 1.5rem;">
-                    <div class="stat-card">
-                        <div class="stat-value">${distribuicao.totalPrimeiras || 0}</div>
-                        <div class="stat-label">Primeiras Entregas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${distribuicao.totalEntregas || 0}</div>
-                        <div class="stat-label">Entregas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${distribuicao.totalDevolucoes || 0}</div>
-                        <div class="stat-label">Devoluções</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${distribuicao.totalTrocas || 0}</div>
-                        <div class="stat-label">Trocas</div>
-                    </div>
-                </div>
-                
-                <h5 style="margin-bottom: 1rem;">Funcionários e EPIs:</h5>
-            `;
-            
-            if (itensDetalhados.length === 0) {
-                html += `
-                    <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
-                        <p>Nenhum item detalhado encontrado para esta sessão</p>
-                    </div>
-                `;
-            } else {
-                // Agrupar por funcionário
-                const groupedItems = new Map();
-                itensDetalhados.forEach(item => {
-                    if (!groupedItems.has(item.funcionario)) {
-                        groupedItems.set(item.funcionario, []);
-                    }
-                    groupedItems.get(item.funcionario).push(item);
-                });
-                
-                groupedItems.forEach((items, matricula) => {
-                    const funcionario = funcionarios.find(f => f.matricula === matricula);
-                    const naoDevolveu = items.filter(i => i.entregouAntigo === 'nao').length;
-                    
-                    html += `
-                        <div style="margin-bottom: 1.5rem; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
-                            <div style="background: var(--gray-50); padding: 1rem; border-bottom: 1px solid var(--gray-200);">
-                                <h6 style="margin: 0; color: var(--gray-900);">
-                                    ${funcionario ? funcionario.nome : matricula}
-                                    ${naoDevolveu > 0 ? `<span class="badge badge-warning" style="margin-left: 1rem;">${naoDevolveu} não devolveu</span>` : ''}
-                                </h6>
-                                <small style="color: var(--gray-600);">Mat: ${matricula} | ${items.length} item(s)</small>
-                            </div>
-                            <div style="padding: 1rem;">
-                                ${items.map(item => {
-                                    const epi = epis.find(e => e.codigo === item.epi);
-                                    return `
-                                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 2fr; gap: 1rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--gray-100);">
-                                            <div>
-                                                <strong>${epi ? epi.nome : item.epi}</strong><br>
-                                                <small style="color: var(--gray-600);">Qtd: ${item.quantidade}</small>
-                                            </div>
-                                            <div>
-                                                <span class="badge badge-${item.tipoOperacao === 'primeira_entrega' ? 'info' : 
-                                                                           item.tipoOperacao === 'entrega' ? 'success' : 
-                                                                           item.tipoOperacao === 'devolucao' ? 'warning' : 'primary'}">
-                                                    ${item.tipoOperacao?.replace('_', ' ').toUpperCase() || 'ENTREGA'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                ${item.entregouAntigo ? 
-                                                    `<span class="badge badge-${item.entregouAntigo === 'sim' ? 'success' : 'danger'}">
-                                                        EPI antigo: ${item.entregouAntigo === 'sim' ? 'Entregue' : 'NÃO entregue'}
-                                                    </span>` : '-'}
-                                            </div>
-                                            <div>
-                                                <small style="color: var(--gray-600);">
-                                                    ${item.justificativa ? `Justificativa: ${item.justificativa}` : 
-                                                      item.observacao ? item.observacao : '-'}
-                                                </small>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        </div>
-                    `;
-                });
-            }
+            const groupedItems = (distribuicao.itensDetalhados || []).reduce((acc, item) => {
+                if (!acc.has(item.funcionario)) acc.set(item.funcionario, []);
+                acc.get(item.funcionario).push(item);
+                return acc;
+            }, new Map());
+
+            groupedItems.forEach((items, matricula) => {
+                const funcionario = funcionarios.find(f => f.matricula === matricula);
+                html += `<div style="margin-bottom: 1rem; border: 1px solid var(--gray-200); border-radius: 8px;"><div style="background: var(--gray-50); padding: 1rem;">
+                            <h6>${funcionario ? funcionario.nome : matricula} <small>(Mat: ${matricula})</small></h6></div><div style="padding: 1rem;">
+                            ${items.map(item => {
+                                const epi = epis.find(e => e.codigo === item.epi);
+                                return `<div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 1rem; padding: 0.5rem 0;">
+                                            <div><strong>${epi ? epi.nome : item.epi}</strong> (Qtd: ${item.quantidade})</div>
+                                            <div><span class="badge badge-primary">${item.tipoOperacao?.replace('_', ' ').toUpperCase() || 'ENTREGA'}</span></div>
+                                            <div><small>${item.observacao || '-'}</small></div>
+                                        </div>`;
+                            }).join('')}</div></div>`;
+            });
             
             document.getElementById('detalhesSessaoContent').innerHTML = html;
             window.currentSessaoDetalhes = distribuicao;
@@ -4524,112 +3749,25 @@
 
         function exportarDetalhesSessao() {
             if (!window.currentSessaoDetalhes) return;
-            
             const sessao = window.currentSessaoDetalhes;
             const dados = (sessao.itensDetalhados || []).map(item => {
-                const funcionario = funcionarios.find(f => f.matricula === item.funcionario);
+                const func = funcionarios.find(f => f.matricula === item.funcionario);
                 const epi = epis.find(e => e.codigo === item.epi);
-                
-                return {
-                    'Sessão': sessao.id,
-                    'Data': formatarData(sessao.data),
-                    'Hora': sessao.hora,
-                    'Funcionário': funcionario ? funcionario.nome : item.funcionario,
-                    'Matrícula': item.funcionario,
-                    'EPI': epi ? epi.nome : item.epi,
-                    'Código EPI': item.epi,
-                    'Tipo Operação': item.tipoOperacao?.replace('_', ' ').toUpperCase() || 'ENTREGA',
-                    'Quantidade': item.quantidade,
-                    'Entregou EPI Antigo': item.entregouAntigo === 'sim' ? 'SIM' : item.entregouAntigo === 'nao' ? 'NÃO' : '-',
-                    'Justificativa': item.justificativa || '-',
-                    'Observações': item.observacao || '-',
-                    'Responsável': sessao.responsavel
-                };
+                return { 'Sessão': sessao.id, 'Data': formatarData(sessao.data), 'Hora': sessao.hora, 'Funcionário': func ? func.nome : item.funcionario, 'Matrícula': item.funcionario, 'EPI': epi ? epi.nome : item.epi, 'Código EPI': item.epi, 'Tipo': item.tipoOperacao?.replace('_', ' ').toUpperCase() || 'ENTREGA', 'Qtd': item.quantidade, 'Obs': item.observacao || '-', 'Responsável': sessao.responsavel };
             });
-            
-            const ws = XLSX.utils.json_to_sheet(dados);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Detalhes');
-            
-            const arquivo = `Detalhes_Sessao_${sessao.id}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '_')}.xlsx`;
-            XLSX.writeFile(wb, arquivo);
-            
-            showNotification('Detalhes da sessão exportados!', 'success');
-        }
-
-        // Funções que estavam faltando
-        function removerFuncionario(matricula) {
-            if (confirm('Tem certeza que deseja remover este funcionário?')) {
-                funcionarios = funcionarios.filter(f => f.matricula !== matricula);
-                saveLocalData();
-                updateAllTables();
-                updateFilters();
-                showNotification('Funcionário removido!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
-            }
+            exportarExcel(dados, `Detalhes_Sessao_${sessao.id}`);
         }
 
         function editarUsuario(username) {
-            // Função para editar usuário existente
             const user = usuarios[username];
             if (!user) return;
-            
-            // Preencher modal com dados do usuário
             document.getElementById('novoUsuario').value = username;
             document.getElementById('novoUsuario').disabled = true;
             document.getElementById('novoNomeCompleto').value = user.name;
             document.getElementById('novaSenha').value = user.password;
             document.getElementById('novoNivelAcesso').value = user.level;
-            
-            // Alterar título do modal
             document.querySelector('#modalNovoUsuario .modal-title').textContent = 'Editar Usuário';
-            
             document.getElementById('modalNovoUsuario').classList.add('show');
-        }
-
-        // Sobrescrever função de salvar para suportar edição
-        function salvarNovoUsuario() {
-            const username = document.getElementById('novoUsuario').value.toLowerCase();
-            const name = document.getElementById('novoNomeCompleto').value;
-            const password = document.getElementById('novaSenha').value;
-            const level = document.getElementById('novoNivelAcesso').value;
-            const isEdit = document.getElementById('novoUsuario').disabled;
-            
-            if (!username || !name || !password) {
-                showNotification('Preencha todos os campos!', 'warning');
-                return;
-            }
-            
-            if (!isEdit && (DEFAULT_USERS[username] || usuarios[username])) {
-                showNotification('Usuário já existe!', 'error');
-                return;
-            }
-            
-            usuarios[username] = {
-                name,
-                password,
-                level,
-                active: true,
-                createdAt: usuarios[username]?.createdAt || new Date().toISOString(),
-                lastAccess: usuarios[username]?.lastAccess || null
-            };
-            
-            saveLocalData();
-            updateTabelaUsuarios();
-            closeModal('modalNovoUsuario');
-            
-            // Resetar modal
-            document.getElementById('novoUsuario').disabled = false;
-            document.querySelector('#modalNovoUsuario .modal-title').textContent = 'Novo Usuário';
-            
-            showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
-            
-            if (navigator.onLine) {
-                syncData();
-            }
         }
 
         function limparHistorico() {
@@ -4640,158 +3778,49 @@
                 updateAllTables();
                 updateStatistics();
                 showNotification('Histórico limpo!', 'info');
-                
-                if (navigator.onLine) {
-                    syncData();
-                }
+                if (navigator.onLine) { syncData(); }
             }
         }
 
-        // Relatórios avançados (implementação básica)
+        // Relatórios avançados
         function gerarRelatorioAvancado() {
-            const periodoInicial = document.getElementById('periodoInicial').value;
-            const periodoFinal = document.getElementById('periodoFinal').value;
-            const tipoRelatorio = document.getElementById('tipoRelatorio').value;
+            const pInicial = document.getElementById('periodoInicial').value;
+            const pFinal = document.getElementById('periodoFinal').value;
+            if (!pInicial || !pFinal) { showNotification('Selecione o período!', 'warning'); return; }
             
-            if (!periodoInicial || !periodoFinal) {
-                showNotification('Selecione o período!', 'warning');
-                return;
-            }
+            const histFiltrado = historico.filter(h => h.data >= pInicial && h.data <= pFinal);
             
-            const historioFiltrado = historico.filter(h => {
-                const dataHistorico = new Date(h.data);
-                const dataInicial = new Date(periodoInicial);
-                const dataFinal = new Date(periodoFinal);
-                
-                return dataHistorico >= dataInicial && dataHistorico <= dataFinal;
-            });
-            
-            let relatorioHTML = `
-                <div class="stats-grid" style="margin-bottom: 2rem;">
-                    <div class="stat-card">
-                        <div class="stat-value">${historioFiltrado.filter(h => h.acao === 'entrega' || h.acao === 'primeira_entrega').length}</div>
-                        <div class="stat-label">Entregas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${historioFiltrado.filter(h => h.acao === 'devolucao').length}</div>
-                        <div class="stat-label">Devoluções</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${historioFiltrado.filter(h => h.acao === 'troca').length}</div>
-                        <div class="stat-label">Trocas</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value">${new Set(historioFiltrado.map(h => h.funcionario)).size}</div>
-                        <div class="stat-label">Funcionários Únicos</div>
-                    </div>
-                </div>
-                
-                <h4>Resumo do Período</h4>
-                <p>Período analisado: ${formatarData(periodoInicial)} a ${formatarData(periodoFinal)}</p>
-                <p>Total de movimentações: <strong>${historioFiltrado.length}</strong></p>
-            `;
-            
-            document.getElementById('relatorioConteudo').innerHTML = relatorioHTML;
+            let html = `<h4>Resumo de ${formatarData(pInicial)} a ${formatarData(pFinal)}</h4>
+                        <p>Total de movimentações: <strong>${histFiltrado.length}</strong></p>`;
+            document.getElementById('relatorioConteudo').innerHTML = html;
             document.getElementById('relatorioResultado').classList.remove('hidden');
         }
-
-        function gerarRelatorioWhatsAppAvancado() {
-            const relatorioDiv = document.getElementById('relatorioConteudo');
-            if (!relatorioDiv.innerHTML || relatorioDiv.innerHTML.trim() === '') {
-                showNotification('Gere um relatório primeiro!', 'warning');
-                return;
-            }
-            
-            const periodo = `${formatarData(document.getElementById('periodoInicial').value)} a ${formatarData(document.getElementById('periodoFinal').value)}`;
-            const tipo = document.getElementById('tipoRelatorio').selectedOptions[0].text;
-            
-            let texto = `*📊 RELATÓRIO AVANÇADO - GRUPOGPS*\n`;
-            texto += `*${tipo.toUpperCase()}*\n\n`;
-            texto += `📅 Período: ${periodo}\n`;
-            texto += `━━━━━━━━━━━━━━━━━━\n\n`;
-            
-            // Extrair estatísticas do relatório
-            const stats = relatorioDiv.querySelectorAll('.stat-value');
-            if (stats.length >= 4) {
-                texto += `📦 Entregas: ${stats[0].textContent}\n`;
-                texto += `↩️ Devoluções: ${stats[1].textContent}\n`;
-                texto += `🔄 Trocas: ${stats[2].textContent}\n`;
-                texto += `👥 Funcionários: ${stats[3].textContent}\n`;
-            }
-            
-            texto += `\n━━━━━━━━━━━━━━━━━━\n`;
-            texto += `_Sistema GrupoGPS © 2025_`;
-            
-            navigator.clipboard.writeText(texto).then(() => {
-                showNotification('Relatório copiado para WhatsApp!', 'success');
-            });
-        }
-
-        function gerarRelatorioPDF() {
-            showNotification('Funcionalidade PDF será implementada em breve', 'info');
-        }
+        function gerarRelatorioWhatsAppAvancado() { showNotification('Funcionalidade em desenvolvimento', 'info'); }
+        function gerarRelatorioPDF() { showNotification('Funcionalidade PDF em desenvolvimento', 'info'); }
 
         // Carregar configurações salvas
         function carregarConfiguracoes() {
             try {
-                // CORREÇÃO: Carregar token APENAS do localStorage (nunca das configurações sincronizadas)
                 const tokenSalvo = localStorage.getItem('grupoGPS_githubToken');
                 if (tokenSalvo) {
                     GITHUB_CONFIG.token = tokenSalvo;
-                    
-                    // Atualizar campo se estiver na página de configurações
                     const tokenField = document.getElementById('githubToken');
-                    if (tokenField) {
-                        tokenField.value = tokenSalvo;
-                    }
-                    console.log('Token GitHub carregado com sucesso');
+                    if (tokenField) { tokenField.value = tokenSalvo; }
                 }
-                
-                // Carregar outras configurações
-                if (configuracoes.nomeEmpresa) {
-                    const nomeField = document.getElementById('nomeEmpresa');
-                    if (nomeField) nomeField.value = configuracoes.nomeEmpresa;
-                }
-                
-                if (configuracoes.autoSaveInterval) {
-                    const autoSaveField = document.getElementById('autoSaveInterval');
-                    if (autoSaveField) autoSaveField.value = configuracoes.autoSaveInterval;
-                }
-                
-                if (configuracoes.backupAutomatico !== undefined) {
-                    const backupField = document.getElementById('backupAutomatico');
-                    if (backupField) backupField.value = configuracoes.backupAutomatico.toString();
-                }
-                
-                console.log('Configurações carregadas:', configuracoes);
+                if (configuracoes.nomeEmpresa) { document.getElementById('nomeEmpresa').value = configuracoes.nomeEmpresa; }
+                if (configuracoes.autoSaveInterval) { document.getElementById('autoSaveInterval').value = configuracoes.autoSaveInterval; }
+                if (configuracoes.backupAutomatico !== undefined) { document.getElementById('backupAutomatico').value = configuracoes.backupAutomatico.toString(); }
             } catch (error) {
                 console.error('Erro ao carregar configurações:', error);
             }
         }
 
-        // CORREÇÃO: Função para limpar token das configurações existentes (executar uma vez)
         function limparTokenDasConfiguracoes() {
             if (configuracoes.githubToken) {
                 delete configuracoes.githubToken;
                 saveLocalData();
                 console.log('Token removido das configurações salvas para evitar sincronização.');
             }
-        }
-
-        // Atualizar loadApplicationData para incluir configurações
-        async function loadApplicationData() {
-            // Carregar EPIs padrão se necessário
-            if (epis.length === 0) {
-                loadDefaultEPIs();
-            }
-            
-            // Inicializar interface
-            inicializarDataHora();
-            updateAllTables();
-            updateStatistics();
-            updateFilters();
-            updateEmployeeRecords();
-            carregarConfiguracoes();
         }
 
         console.log('🦺 Sistema de Controle de EPIs - GrupoGPS v3.0 carregado com sucesso!');
