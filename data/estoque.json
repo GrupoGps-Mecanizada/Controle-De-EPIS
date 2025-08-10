@@ -1,0 +1,52 @@
+{
+  "EPI001": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.183Z"
+  },
+  "EPI002": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI003": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI004": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI005": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI006": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI007": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI008": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI009": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  },
+  "EPI010": {
+    "quantidade": 50,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T15:36:45.184Z"
+  }
+}
