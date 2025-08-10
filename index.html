@@ -2263,25 +2263,32 @@
                 });
                 
                 if (response.status === 404) {
+                    // *** INÍCIO DA CORREÇÃO DE ENCODING ***
+                    // Usamos unescape(encodeURIComponent(...)) para garantir que caracteres
+                    // especiais (como 'á') sejam corretamente codificados em Base64.
+                    const readmeContent = '# Dados do Sistema de Controle de EPIs';
+                    const encodedContent = btoa(unescape(encodeURIComponent(readmeContent)));
+                    // *** FIM DA CORREÇÃO DE ENCODING ***
+
                     await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/data/README.md`, {
                         method: 'PUT',
                         headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: 'Criar estrutura inicial do sistema de EPIs', content: btoa('# Dados do Sistema de Controle de EPIs') })
+                        body: JSON.stringify({ message: 'Criar estrutura inicial do sistema de EPIs', content: encodedContent })
                     });
                 }
             } catch (error) {
                 console.warn('Estrutura já existe ou erro ao criar:', error);
             }
         }
-
-        // *** INÍCIO DA CORREÇÃO PRINCIPAL ***
+        
+        // *** INÍCIO DA CORREÇÃO PRINCIPAL E MELHORIA DE ROBUSTEZ ***
         async function updateGitHubFile(token, path, data) {
             const maxRetries = 3;
             let lastError = null;
 
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
-                    // 1. Obter o SHA mais recente em CADA tentativa
+                    // 1. Obter o SHA mais recente em CADA tentativa para evitar conflitos
                     let sha = null;
                     const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
                         headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
@@ -2294,7 +2301,8 @@
                         throw new Error(`Falha ao obter SHA: ${getResponse.statusText}`);
                     }
 
-                    // 2. Preparar corpo da requisição
+                    // 2. Preparar corpo da requisição com a correção de encoding
+                    // Esta correção é vital para qualquer dado com acentuação (nomes, etc.)
                     const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
                     const body = {
                         message: `${sha ? 'Atualizar' : 'Criar'} ${path.split('/').pop()} - ${new Date().toLocaleString('pt-BR')}`,
@@ -2317,12 +2325,12 @@
                         return await response.json(); // Sucesso, sair da função
                     }
                     
-                    // 4. Lidar com erros
+                    // 4. Lidar com erros, especialmente conflitos (409)
                     lastError = await response.json().catch(() => ({ message: response.statusText }));
-                    if (response.status === 409) {
+                    if (response.status === 409) { // 409 Conflict
                         console.warn(`Tentativa ${attempt}: Conflito (409) para ${path}. Tentando novamente...`);
                         if (attempt < maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Esperar um pouco antes de tentar de novo
+                            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Esperar antes de tentar de novo
                         }
                     } else {
                         // Para outros erros (401, 403, 500 etc.), falhar imediatamente
@@ -2338,8 +2346,7 @@
             // Se todas as tentativas falharem
             throw new Error(`Falha ao sincronizar ${path} após ${maxRetries} tentativas. Último erro: ${lastError.message}`);
         }
-        // *** FIM DA CORREÇÃO PRINCIPAL ***
-
+        // *** FIM DA CORREÇÃO PRINCIPAL E MELHORIA DE ROBUSTEZ ***
 
         function updateSyncStatus(status, message) {
             const dot = document.getElementById('syncDot');
@@ -2751,27 +2758,6 @@
             if (funcData && funcData.epis.has(epiCodigo)) {
                 funcData.epis.get(epiCodigo).observacao = observacao;
                 salvarSessaoLocal();
-            }
-        }
-
-        function removerEPI(matricula, epiCodigo) {
-            if (confirm('Remover este EPI?')) {
-                const funcData = sessaoAtual.funcionarios.get(matricula);
-                if (funcData) {
-                    funcData.epis.delete(epiCodigo);
-                    updateEmployeeRecords();
-                    salvarSessaoLocal();
-                    showNotification('EPI removido!', 'info');
-                }
-            }
-        }
-
-        function removerFuncionario(matricula) {
-            if (confirm('Remover este funcionário da sessão?')) {
-                sessaoAtual.funcionarios.delete(matricula);
-                updateEmployeeRecords();
-                salvarSessaoLocal();
-                showNotification('Funcionário removido da sessão!', 'info');
             }
         }
 
