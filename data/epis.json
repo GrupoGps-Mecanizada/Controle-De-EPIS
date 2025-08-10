@@ -1,82 +1,84 @@
-[
-  {
+{
+  "0": {
     "codigo": "EPI001",
-    "nome": "Capacete de SeguranÃÂ§a",
-    "categoria": "ProteÃÂ§ÃÂ£o da CabeÃÂ§a",
+    "nome": "Capacete de SeguranÃÂÃÂ§a",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o da CabeÃÂÃÂ§a",
     "ca": "12345",
     "validadeCA": "2026-12-31",
     "vidaUtil": 365
   },
-  {
+  "1": {
     "codigo": "EPI002",
-    "nome": "ÃÂculos de ProteÃÂ§ÃÂ£o",
-    "categoria": "ProteÃÂ§ÃÂ£o Visual",
+    "nome": "ÃÂÃÂculos de ProteÃÂÃÂ§ÃÂÃÂ£o",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o Visual",
     "ca": "23456",
     "validadeCA": "2026-12-31",
     "vidaUtil": 180
   },
-  {
+  "2": {
     "codigo": "EPI003",
     "nome": "Luva PVC",
-    "categoria": "ProteÃÂ§ÃÂ£o das MÃÂ£os",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o das MÃÂÃÂ£os",
     "ca": "34567",
     "validadeCA": "2026-12-31",
     "vidaUtil": 30
   },
-  {
+  "3": {
     "codigo": "EPI004",
-    "nome": "Botina de SeguranÃÂ§a",
-    "categoria": "ProteÃÂ§ÃÂ£o dos PÃÂ©s",
+    "nome": "Botina de SeguranÃÂÃÂ§a",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o dos PÃÂÃÂ©s",
     "ca": "45678",
     "validadeCA": "2026-12-31",
     "vidaUtil": 180
   },
-  {
+  "4": {
     "codigo": "EPI005",
     "nome": "Bota PVC",
-    "categoria": "ProteÃÂ§ÃÂ£o dos PÃÂ©s",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o dos PÃÂÃÂ©s",
     "ca": "56789",
     "validadeCA": "2026-12-31",
     "vidaUtil": 90
   },
-  {
+  "5": {
     "codigo": "EPI006",
-    "nome": "MacacÃÂ£o PVC",
-    "categoria": "ProteÃÂ§ÃÂ£o do Corpo",
+    "nome": "MacacÃÂÃÂ£o PVC",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o do Corpo",
     "ca": "67890",
     "validadeCA": "2026-12-31",
     "vidaUtil": 60
   },
-  {
+  "6": {
     "codigo": "EPI007",
     "nome": "Protetor Auricular",
-    "categoria": "ProteÃÂ§ÃÂ£o Auditiva",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o Auditiva",
     "ca": "78901",
     "validadeCA": "2026-12-31",
     "vidaUtil": 30
   },
-  {
+  "7": {
     "codigo": "EPI008",
     "nome": "Viseira Facial",
-    "categoria": "ProteÃÂ§ÃÂ£o Visual",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o Visual",
     "ca": "89012",
     "validadeCA": "2026-12-31",
     "vidaUtil": 90
   },
-  {
+  "8": {
     "codigo": "EPI009",
     "nome": "Respirador PFF2",
-    "categoria": "ProteÃÂ§ÃÂ£o RespiratÃÂ³ria",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o RespiratÃÂÃÂ³ria",
     "ca": "90123",
     "validadeCA": "2026-12-31",
     "vidaUtil": 1
   },
-  {
+  "9": {
     "codigo": "EPI010",
-    "nome": "Cinto de SeguranÃÂ§a",
-    "categoria": "ProteÃÂ§ÃÂ£o Contra Quedas",
+    "nome": "Cinto de SeguranÃÂÃÂ§a",
+    "categoria": "ProteÃÂÃÂ§ÃÂÃÂ£o Contra Quedas",
     "ca": "01234",
     "validadeCA": "2026-12-31",
     "vidaUtil": 365
-  }
-]
+  },
+  "_lastUpdate": "2025-08-10T21:54:12.385Z",
+  "_updatedBy": "admin"
+}
