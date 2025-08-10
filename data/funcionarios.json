@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "matricula": "82158808",
+    "nome": "Warlison Cristian Santos Abreu",
+    "funcao": "Motorista",
+    "escala": "ADM",
+    "equipamento": "Auto Vácuo",
+    "supervisor": "Sebastião Ribeiro",
+    "status": "Ativo",
+    "dataCadastro": "2025-08-10T21:23:14.789Z"
+  }
+]
