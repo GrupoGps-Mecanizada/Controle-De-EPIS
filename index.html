@@ -2081,8 +2081,10 @@
         async function loadInitialData() {
             try {
                 loadLocalData();
+                limparTokenDasConfiguracoes(); // CORREÇÃO: Limpa o token antes de qualquer sincronização
+                carregarConfiguracoes(); // Carregar configurações primeiro
                 
-                if (navigator.onLine) {
+                if (navigator.onLine && GITHUB_CONFIG.token) {
                     await syncData();
                 }
             } catch (error) {
@@ -2159,6 +2161,7 @@
             updateStatistics();
             updateFilters();
             updateEmployeeRecords();
+            carregarConfiguracoes();
         }
 
         function loadDefaultEPIs() {
@@ -2197,7 +2200,7 @@
                 return;
             }
 
-            const token = GITHUB_CONFIG.token || configuracoes.githubToken;
+            const token = GITHUB_CONFIG.token || localStorage.getItem('grupoGPS_githubToken');
             if (!token) {
                 showNotification('Configure o token do GitHub nas configurações', 'warning');
                 return;
@@ -2209,23 +2212,43 @@
                 // Criar estrutura de pastas se não existir
                 await createGitHubStructure(token);
                 
-                // Sincronizar cada arquivo
+                // CORREÇÃO: Filtrar token das configurações antes de sincronizar
+                const configuracoesSeguras = { ...configuracoes };
+                delete configuracoesSeguras.githubToken; // Remove o token se existir
+
                 const files = [
-                    { path: GITHUB_CONFIG.paths.funcionarios, data: funcionarios },
-                    { path: GITHUB_CONFIG.paths.epis, data: epis },
-                    { path: GITHUB_CONFIG.paths.estoque, data: estoque },
-                    { path: GITHUB_CONFIG.paths.historico, data: historico },
-                    { path: GITHUB_CONFIG.paths.distribuicoes, data: distribuicoes },
-                    { path: GITHUB_CONFIG.paths.usuarios, data: usuarios },
-                    { path: GITHUB_CONFIG.paths.configuracoes, data: configuracoes }
+                    { path: GITHUB_CONFIG.paths.funcionarios, data: funcionarios, name: 'Funcionários' },
+                    { path: GITHUB_CONFIG.paths.epis, data: epis, name: 'EPIs' },
+                    { path: GITHUB_CONFIG.paths.estoque, data: estoque, name: 'Estoque' },
+                    { path: GITHUB_CONFIG.paths.historico, data: historico, name: 'Histórico' },
+                    { path: GITHUB_CONFIG.paths.distribuicoes, data: distribuicoes, name: 'Distribuições' },
+                    { path: GITHUB_CONFIG.paths.usuarios, data: usuarios, name: 'Usuários' },
+                    { path: GITHUB_CONFIG.paths.configuracoes, data: configuracoesSeguras, name: 'Configurações' }
                 ];
+
+                
+                let sucessos = 0;
+                let erros = 0;
                 
                 for (const file of files) {
-                    await updateGitHubFile(token, file.path, file.data);
+                    try {
+                        await updateGitHubFile(token, file.path, file.data);
+                        sucessos++;
+                    } catch (error) {
+                        console.error(`Erro ao sincronizar ${file.name}:`, error);
+                        erros++;
+                    }
                 }
                 
-                updateSyncStatus('success', 'Sincronizado');
-                showNotification('Dados sincronizados com sucesso!', 'success');
+                if (sucessos > 0) {
+                    updateSyncStatus('success', 'Sincronizado');
+                    const message = erros > 0 ? 
+                        `Sincronizado: ${sucessos} OK, ${erros} erros` : 
+                        'Dados sincronizados com sucesso!';
+                    showNotification(message, erros > 0 ? 'warning' : 'success');
+                } else {
+                    throw new Error('Nenhum arquivo foi sincronizado');
+                }
                 
                 localStorage.setItem('grupoGPS_lastSync', new Date().toISOString());
                 
@@ -2270,6 +2293,8 @@
             try {
                 // Primeiro, tentar obter o arquivo para pegar o SHA
                 let sha = null;
+                let fileExists = false;
+                
                 try {
                     const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${path}`, {
                         headers: {
@@ -2281,15 +2306,21 @@
                     if (getResponse.ok) {
                         const fileData = await getResponse.json();
                         sha = fileData.sha;
+                        fileExists = true;
+                    } else if (getResponse.status !== 404) {
+                        throw new Error(`Erro ao verificar arquivo: ${getResponse.statusText}`);
                     }
                 } catch (error) {
-                    // Arquivo não existe, será criado
+                    // Se o erro não for 404, é um erro real
+                    if (!error.message.includes('404')) {
+                        console.warn(`Aviso ao verificar ${path}:`, error);
+                    }
                 }
                 
                 // Criar ou atualizar o arquivo
-                const content = btoa(JSON.stringify(data, null, 2));
+                const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
                 const body = {
-                    message: `Atualizar ${path.split('/').pop()} - ${new Date().toLocaleString('pt-BR')}`,
+                    message: `${fileExists ? 'Atualizar' : 'Criar'} ${path.split('/').pop()} - ${new Date().toLocaleString('pt-BR')}`,
                     content: content,
                     branch: GITHUB_CONFIG.branch
                 };
@@ -2309,13 +2340,23 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`Erro ao atualizar ${path}: ${response.statusText}`);
+                    const errorData = await response.json().catch(() => ({}));
+                    console.warn(`Erro ${response.status} ao sincronizar ${path}:`, errorData);
+                    
+                    // Se for erro 409 (conflict), tentar novamente buscando o SHA mais recente
+                    if (response.status === 409) {
+                        console.log(`Tentando novamente ${path} devido a conflito...`);
+                        return await updateGitHubFile(token, path, data);
+                    }
+                    
+                    throw new Error(`Erro ${response.status}: ${errorData.message || response.statusText}`);
                 }
                 
-                console.log(`Arquivo ${path} sincronizado com sucesso`);
+                console.log(`✅ Arquivo ${path} sincronizado com sucesso`);
+                return await response.json();
                 
             } catch (error) {
-                console.error(`Erro ao sincronizar ${path}:`, error);
+                console.error(`❌ Erro ao sincronizar ${path}:`, error);
                 throw error;
             }
         }
@@ -2755,23 +2796,35 @@
         }
 
         function salvarConfigGitHub() {
-            const token = document.getElementById('githubToken').value;
+            const token = document.getElementById('githubToken').value.trim();
             
-            if (token) {
-                GITHUB_CONFIG.token = token;
-                configuracoes.githubToken = token;
-                saveLocalData();
-                showNotification('Configurações do GitHub salvas!', 'success');
-                
-                // Testar sincronização
-                syncData();
-            } else {
+            if (!token) {
                 showNotification('Informe o token do GitHub!', 'warning');
+                return;
             }
+            
+            // CORREÇÃO: Salvar em múltiplos lugares para garantir persistência
+            GITHUB_CONFIG.token = token;
+            // ❌ NÃO salvar no objeto configuracoes (será sincronizado com GitHub)
+            localStorage.setItem('grupoGPS_githubToken', token);
+            
+            // CORREÇÃO: Salvar apenas configurações SEM o token
+            saveLocalData();
+            
+            showNotification('Token do GitHub salvo com sucesso!', 'success');
+            
+            // Testar conexão automaticamente
+            setTimeout(() => {
+                testarConexaoGitHub();
+            }, 500);
         }
 
         function testarConexaoGitHub() {
-            const token = document.getElementById('githubToken').value;
+            // CORREÇÃO: Buscar o token sem olhar o objeto `configuracoes`
+            const token = document.getElementById('githubToken').value.trim() || 
+                         GITHUB_CONFIG.token || 
+                         localStorage.getItem('grupoGPS_githubToken');
+            
             if (!token) {
                 showNotification('Informe o token primeiro!', 'warning');
                 return;
@@ -2788,13 +2841,25 @@
             })
             .then(response => {
                 if (response.ok) {
-                    showNotification('Conexão testada com sucesso!', 'success');
+                    return response.json();
                 } else {
-                    throw new Error('Falha na autenticação');
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            })
+            .then(data => {
+                showNotification(`✅ Conexão OK! Repositório: ${data.full_name}`, 'success');
+                console.log('Repositório acessível:', data);
+                
+                // Salvar o token se o teste passou
+                if (document.getElementById('githubToken').value.trim()) {
+                    GITHUB_CONFIG.token = token;
+                    localStorage.setItem('grupoGPS_githubToken', token);
+                    saveLocalData();
                 }
             })
             .catch(error => {
-                showNotification('Erro na conexão: ' + error.message, 'error');
+                console.error('Erro na conexão:', error);
+                showNotification('❌ Erro na conexão: ' + error.message, 'error');
             });
         }
 
@@ -3896,13 +3961,14 @@
             const name = document.getElementById('novoNomeCompleto').value;
             const password = document.getElementById('novaSenha').value;
             const level = document.getElementById('novoNivelAcesso').value;
+            const isEdit = document.getElementById('novoUsuario').disabled;
             
             if (!username || !name || !password) {
                 showNotification('Preencha todos os campos!', 'warning');
                 return;
             }
             
-            if (DEFAULT_USERS[username] || usuarios[username]) {
+            if (!isEdit && (DEFAULT_USERS[username] || usuarios[username])) {
                 showNotification('Usuário já existe!', 'error');
                 return;
             }
@@ -3912,14 +3978,19 @@
                 password,
                 level,
                 active: true,
-                createdAt: new Date().toISOString(),
-                lastAccess: null
+                createdAt: usuarios[username]?.createdAt || new Date().toISOString(),
+                lastAccess: usuarios[username]?.lastAccess || null
             };
             
             saveLocalData();
             updateTabelaUsuarios();
             closeModal('modalNovoUsuario');
-            showNotification('Usuário criado com sucesso!', 'success');
+            
+            // Resetar modal
+            document.getElementById('novoUsuario').disabled = false;
+            document.querySelector('#modalNovoUsuario .modal-title').textContent = 'Novo Usuário';
+            
+            showNotification(`Usuário ${isEdit ? 'atualizado' : 'criado'} com sucesso!`, 'success');
             
             if (navigator.onLine) {
                 syncData();
@@ -4662,21 +4733,48 @@
 
         // Carregar configurações salvas
         function carregarConfiguracoes() {
+            try {
+                // CORREÇÃO: Carregar token APENAS do localStorage (nunca das configurações sincronizadas)
+                const tokenSalvo = localStorage.getItem('grupoGPS_githubToken');
+                if (tokenSalvo) {
+                    GITHUB_CONFIG.token = tokenSalvo;
+                    
+                    // Atualizar campo se estiver na página de configurações
+                    const tokenField = document.getElementById('githubToken');
+                    if (tokenField) {
+                        tokenField.value = tokenSalvo;
+                    }
+                    console.log('Token GitHub carregado com sucesso');
+                }
+                
+                // Carregar outras configurações
+                if (configuracoes.nomeEmpresa) {
+                    const nomeField = document.getElementById('nomeEmpresa');
+                    if (nomeField) nomeField.value = configuracoes.nomeEmpresa;
+                }
+                
+                if (configuracoes.autoSaveInterval) {
+                    const autoSaveField = document.getElementById('autoSaveInterval');
+                    if (autoSaveField) autoSaveField.value = configuracoes.autoSaveInterval;
+                }
+                
+                if (configuracoes.backupAutomatico !== undefined) {
+                    const backupField = document.getElementById('backupAutomatico');
+                    if (backupField) backupField.value = configuracoes.backupAutomatico.toString();
+                }
+                
+                console.log('Configurações carregadas:', configuracoes);
+            } catch (error) {
+                console.error('Erro ao carregar configurações:', error);
+            }
+        }
+
+        // CORREÇÃO: Função para limpar token das configurações existentes (executar uma vez)
+        function limparTokenDasConfiguracoes() {
             if (configuracoes.githubToken) {
-                document.getElementById('githubToken').value = configuracoes.githubToken;
-                GITHUB_CONFIG.token = configuracoes.githubToken;
-            }
-            
-            if (configuracoes.nomeEmpresa) {
-                document.getElementById('nomeEmpresa').value = configuracoes.nomeEmpresa;
-            }
-            
-            if (configuracoes.autoSaveInterval) {
-                document.getElementById('autoSaveInterval').value = configuracoes.autoSaveInterval;
-            }
-            
-            if (configuracoes.backupAutomatico !== undefined) {
-                document.getElementById('backupAutomatico').value = configuracoes.backupAutomatico.toString();
+                delete configuracoes.githubToken;
+                saveLocalData();
+                console.log('Token removido das configurações salvas para evitar sincronização.');
             }
         }
 
