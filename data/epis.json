@@ -3,10 +3,10 @@
     "codigo": "EPI-001",
     "nome": "Luvas PVC",
     "categoria": "Proteção das Mãos",
-    "ca": "",
-    "validadeCA": "2025-08-30",
-    "vidaUtil": 0
+    "ca": "12345",
+    "validadeCA": "2026-08-10",
+    "vidaUtil": 90
   },
-  "_lastUpdate": "2025-08-10T23:19:20.231Z",
+  "_lastUpdate": "2025-08-10T23:20:12.856Z",
   "_updatedBy": "admin"
 }
