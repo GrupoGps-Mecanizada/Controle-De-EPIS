@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "matricula": "82158508",
+    "nome": "Warlison",
+    "funcao": "Motorista",
+    "escala": "24HS",
+    "equipamento": "",
+    "supervisor": "",
+    "status": "Ativo",
+    "dataCadastro": "2025-08-10T20:44:20.995Z"
+  }
+]
