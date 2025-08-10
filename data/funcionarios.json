@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "matricula": "12345",
+    "nome": "Warlison Abreu",
+    "funcao": "Operador",
+    "escala": "ADM",
+    "equipamento": "Alta Pressão",
+    "supervisor": "Ozias",
+    "status": "Ativo",
+    "dataCadastro": "2025-08-10T16:26:46.601Z"
+  }
+]
