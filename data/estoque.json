@@ -48,5 +48,12 @@
     "quantidade": 50,
     "minimo": 10,
     "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
-  }
+  },
+  "EPI-001": {
+    "quantidade": 0,
+    "minimo": 10,
+    "ultimaMovimentacao": "2025-08-10T23:20:21.889Z"
+  },
+  "_lastUpdate": "2025-08-10T23:20:22.285Z",
+  "_updatedBy": "admin"
 }
