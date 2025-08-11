@@ -1470,6 +1470,14 @@
                                 <h4 class="card-title">Configurações GitHub</h4>
                             </div>
                             <div class="card-content">
+                                <!-- NOVA SEÇÃO: Mensagem de instrução para o modo setup -->
+                                <div id="setupInstruction" class="hidden" style="padding: 1rem; margin-bottom: 1rem; background-color: var(--warning-color); color: var(--white); border-radius: 6px;">
+                                    <strong>Modo de Configuração Ativado.</strong><br>
+                                    1. Insira seu Token de Acesso do GitHub e clique em "Salvar".<br>
+                                    2. Clique em "Inicializar Sistema" para criar os arquivos no seu repositório.<br>
+                                    3. Após a confirmação, recarregue a página para usar o sistema normalmente.
+                                </div>
+
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label class="form-label">Token de Acesso</label>
@@ -1488,6 +1496,10 @@
                                     </button>
                                     <button class="btn btn-success" onclick="salvarConfigGitHub()">
                                         Salvar Configurações
+                                    </button>
+                                    <!-- NOVO BOTÃO: Para inicializar o sistema -->
+                                    <button class="btn btn-warning hidden" id="btnInitializeSystem" onclick="initializeSystemFiles()">
+                                        Inicializar Sistema
                                     </button>
                                 </div>
                             </div>
@@ -1841,7 +1853,7 @@
         let lastDataHash = {};
         let retryAttempts = {};
         
-        // Sessão atual (temporária em memória)
+        // SESSÃO PERSISTENTE - Substituir a declaração original
         let sessaoAtual = {
             id: null,
             data: '',
@@ -1849,6 +1861,82 @@
             responsavel: '',
             funcionarios: new Map()
         };
+
+        // Adicionar estas novas funções para persistência da sessão
+        function salvarSessaoLocal() {
+            const sessaoParaSalvar = {
+                id: sessaoAtual.id,
+                data: sessaoAtual.data,
+                hora: sessaoAtual.hora,
+                responsavel: sessaoAtual.responsavel,
+                funcionarios: Array.from(sessaoAtual.funcionarios.entries()).map(([matricula, funcData]) => ({
+                    matricula,
+                    dados: funcData.dados,
+                    observacao: funcData.observacao,
+                    epis: Array.from(funcData.epis.entries()).map(([epiCodigo, epiData]) => ({
+                        epiCodigo,
+                        ...epiData
+                    }))
+                }))
+            };
+            localStorage.setItem('grupoGPS_sessaoAtual', JSON.stringify(sessaoParaSalvar));
+            console.log('✅ Sessão salva localmente');
+        }
+
+        function carregarSessaoLocal() {
+            try {
+                const sessaoSalva = localStorage.getItem('grupoGPS_sessaoAtual');
+                if (sessaoSalva) {
+                    const dados = JSON.parse(sessaoSalva);
+                    sessaoAtual = {
+                        id: dados.id,
+                        data: dados.data,
+                        hora: dados.hora,
+                        responsavel: dados.responsavel,
+                        funcionarios: new Map()
+                    };
+                    
+                    // Restaurar funcionários e EPIs
+                    dados.funcionarios.forEach(funcItem => {
+                        const episMap = new Map();
+                        funcItem.epis.forEach(epi => {
+                            episMap.set(epi.epiCodigo, {
+                                quantidade: epi.quantidade,
+                                observacao: epi.observacao,
+                                tipoOperacao: epi.tipoOperacao,
+                                entregouAntigo: epi.entregouAntigo,
+                                justificativa: epi.justificativa,
+                                timestamp: epi.timestamp
+                            });
+                        });
+                        
+                        sessaoAtual.funcionarios.set(funcItem.matricula, {
+                            dados: funcItem.dados,
+                            observacao: funcItem.observacao,
+                            epis: episMap
+                        });
+                    });
+                    
+                    // Restaurar campos da interface
+                    if (dados.data) document.getElementById('dataOperacao').value = dados.data;
+                    if (dados.hora) document.getElementById('horaOperacao').value = dados.hora;
+                    if (dados.responsavel) document.getElementById('responsavelOperacao').value = dados.responsavel;
+                    
+                    updateEmployeeRecords();
+                    console.log('✅ Sessão restaurada do localStorage');
+                    return true;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar sessão local:', error);
+                localStorage.removeItem('grupoGPS_sessaoAtual');
+            }
+            return false;
+        }
+
+        function limparSessaoLocal() {
+            localStorage.removeItem('grupoGPS_sessaoAtual');
+            console.log('✅ Sessão local limpa');
+        }
 
         // Configuração GitHub
         const GITHUB_CONFIG = {
@@ -1894,9 +1982,9 @@
 
         // INICIALIZAÇÃO DO SISTEMA
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log('🚀 Sistema de Controle de EPIs - GrupoGPS v4.1 CORRIGIDO');
+            console.log('🚀 Sistema de Controle de EPIs - GrupoGPS v4.2 REFINADO');
             console.log('📡 GitHub como fonte única de dados');
-            console.log('🔧 Correções aplicadas: Conflitos GitHub, UTF-8, Arrays válidos');
+            console.log('🔧 Correções aplicadas: Modo Setup, Inicialização de Arquivos, Sincronização Robusta');
             
             // Verificar token de configuração
             const savedToken = localStorage.getItem('grupoGPS_githubToken');
@@ -1904,12 +1992,16 @@
                 GITHUB_CONFIG.token = savedToken;
             }
             
-            // Verificar usuário logado APENAS se há token
+            // ADICIONAR: Tentar restaurar sessão se usuário já logado
             const savedUser = localStorage.getItem('grupoGPS_currentUser');
             if (savedUser && GITHUB_CONFIG.token) {
                 try {
                     const userData = JSON.parse(savedUser);
                     await loginUser(userData.username, userData.level, userData.name);
+                    
+                    // Tentar carregar sessão após login bem-sucedido
+                    carregarSessaoLocal();
+                    
                 } catch (error) {
                     console.error('Erro no login automático:', error);
                     localStorage.removeItem('grupoGPS_currentUser');
@@ -1972,22 +2064,91 @@
         async function handleLogin(event) {
             event.preventDefault();
             
-            const username = document.getElementById('loginUser').value.toLowerCase();
+            const username = document.getElementById('loginUser').value.toLowerCase().trim();
             const password = document.getElementById('loginPassword').value;
+            
+            if (!username || !password) {
+                showNotification('Preencha usuário e senha!', 'warning');
+                return;
+            }
+
+            // NOVA CORREÇÃO: Login de emergência para configurar o token
+            if (username === 'setup' && password === 'gps@2025') {
+                enterSetupMode();
+                return;
+            }
+
+            // Se não há token, não pode continuar, exceto para o setup
+            if (!GITHUB_CONFIG.token) {
+                showNotification('Token do GitHub não configurado. Use o login de "setup" para configurar.', 'error');
+                return;
+            }
             
             // Verificar usuários padrão primeiro
             if (DEFAULT_USERS[username] && DEFAULT_USERS[username].password === password) {
-                await loginUser(username, DEFAULT_USERS[username].level, DEFAULT_USERS[username].name);
-                return;
+                if (DEFAULT_USERS[username].active !== false) {
+                    await loginUser(username, DEFAULT_USERS[username].level, DEFAULT_USERS[username].name);
+                    return;
+                } else {
+                    showNotification('Usuário inativo!', 'error');
+                    return;
+                }
             }
             
-            // Verificar usuários personalizados (carregados do GitHub)
-            if (usuarios[username] && usuarios[username].password === password && usuarios[username].active) {
-                await loginUser(username, usuarios[username].level, usuarios[username].name);
-                return;
+            // CORREÇÃO: Carregar usuários do GitHub se ainda não carregou
+            if (!usuarios || Object.keys(usuarios).length === 0) {
+                try {
+                    showLoading('Verificando credenciais...');
+                    const usuariosData = await getDataFromGitHub('usuarios');
+                    usuarios = (usuariosData && typeof usuariosData === 'object') ? usuariosData : {};
+                    hideLoading();
+                } catch (error) {
+                    hideLoading();
+                    console.error('Erro ao carregar usuários:', error);
+                }
+            }
+            
+            // Verificar usuários personalizados
+            if (usuarios[username] && usuarios[username].password === password) {
+                if (usuarios[username].active !== false) {
+                    await loginUser(username, usuarios[username].level, usuarios[username].name);
+                    return;
+                } else {
+                    showNotification('Usuário inativo!', 'error');
+                    return;
+                }
             }
             
             showNotification('Usuário ou senha incorretos!', 'error');
+        }
+
+        // NOVA FUNÇÃO: Modo de Configuração
+        function enterSetupMode() {
+            console.warn('⚠️ Entrando em Modo de Configuração (Setup Mode)');
+            showNotification('Modo de Configuração: Insira o token do GitHub.', 'warning');
+
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+            
+            // Exibir informações do modo de setup
+            document.getElementById('currentUser').textContent = 'Modo Setup';
+            document.getElementById('userLevel').textContent = 'Configuração';
+            
+            // Forçar a aba de configurações
+            document.querySelectorAll('.nav-tab').forEach(t => {
+                t.classList.remove('active');
+                if (!t.getAttribute('onclick').includes('configuracoes')) {
+                    t.classList.add('disabled');
+                } else {
+                    t.classList.add('active');
+                }
+            });
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('configuracoes-tab').classList.add('active');
+
+            // Mostrar instruções e botão de inicialização
+            document.getElementById('setupInstruction').classList.remove('hidden');
+            document.getElementById('btnInitializeSystem').classList.remove('hidden');
         }
 
         async function loginUser(username, level, name) {
@@ -2006,10 +2167,20 @@
                 // CARREGAR DADOS DO GITHUB OBRIGATORIAMENTE
                 await loadAllDataFromGitHub();
                 
-                // Atualizar último acesso
-                if (usuarios[username]) {
-                    usuarios[username].lastAccess = new Date().toISOString();
-                    await saveDataToGitHubWithRetry('usuarios', usuarios);
+                // CORREÇÃO: Atualizar último acesso corretamente
+                const agora = new Date().toISOString();
+                if (DEFAULT_USERS[username]) {
+                    // Para usuários padrão, salvar em dados separados se necessário
+                    console.log(`Login usuário padrão: ${username} em ${agora}`);
+                } else if (usuarios[username]) {
+                    // Para usuários personalizados, atualizar no objeto
+                    usuarios[username].lastAccess = agora;
+                    try {
+                        await saveDataToGitHubWithRetry('usuarios', usuarios);
+                        console.log(`✅ Último acesso atualizado para ${username}`);
+                    } catch (error) {
+                        console.warn('Não foi possível atualizar último acesso:', error);
+                    }
                 }
                 
                 // Configurar interface
@@ -2022,7 +2193,13 @@
                 
                 // Configurar permissões e inicializar
                 setupTabPermissions();
-                inicializarDataHora();
+                
+                // CORREÇÃO: Tentar carregar sessão salva antes de inicializar nova
+                const sessaoRestaurada = carregarSessaoLocal();
+                if (!sessaoRestaurada) {
+                    inicializarDataHora();
+                }
+                
                 updateAllTables();
                 updateStatistics();
                 updateFilters();
@@ -2133,7 +2310,7 @@
                 }
                 
                 updateSyncStatus('success', 'Dados atualizados');
-                console.log('✅ Dados carregados do GitHub (CORRIGIDO):', {
+                console.log('✅ Dados carregados do GitHub (SINCRONIZADO):', {
                     funcionarios: funcionarios.length,
                     epis: epis.length,
                     historico: historico.length,
@@ -2144,8 +2321,16 @@
                         estoque: typeof estoque === 'object',
                         historico: Array.isArray(historico),
                         distribuicoes: Array.isArray(distribuicoes)
-                    }
+                    },
+                    timestamp: new Date().toLocaleString('pt-BR')
                 });
+
+                setTimeout(() => {
+                    updateAllTables();
+                    updateStatistics();
+                    updateFilters();
+                    console.log('🔄 Interface atualizada após carregamento dos dados');
+                }, 100);
                 
             } catch (error) {
                 updateSyncStatus('error', 'Erro ao carregar');
@@ -2167,14 +2352,12 @@
 
                 if (response.ok) {
                     const fileData = await response.json();
-                    // CORREÇÃO: Usar TextDecoder para garantir UTF-8 correto
                     const decoder = new TextDecoder('utf-8');
                     const uint8Array = Uint8Array.from(atob(fileData.content), c => c.charCodeAt(0));
                     const content = decoder.decode(uint8Array);
                     
                     const parsedData = JSON.parse(content);
                     
-                    // CORREÇÃO: Validar estrutura dos dados
                     if (dataType === 'funcionarios' || dataType === 'epis' || dataType === 'historico' || dataType === 'distribuicoes') {
                         return Array.isArray(parsedData) ? parsedData : [];
                     } else if (dataType === 'estoque' || dataType === 'usuarios' || dataType === 'configuracoes') {
@@ -2183,8 +2366,8 @@
                     
                     return parsedData;
                 } else if (response.status === 404) {
-                    console.log(`Arquivo ${path} não existe, retornando dados padrão`);
-                    return null;
+                    console.warn(`Arquivo ${path} não existe no repositório. Será criado na próxima vez que for salvo.`);
+                    return null; // Retornar null indica que o arquivo precisa ser criado
                 } else {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -2194,7 +2377,6 @@
             }
         }
 
-        // CORREÇÃO: Sistema de retry para conflitos GitHub (409)
         async function saveDataToGitHubWithRetry(dataType, data, maxRetries = 3) {
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
@@ -2203,13 +2385,9 @@
                     if (error.message.includes('409') && attempt < maxRetries) {
                         console.log(`Conflito detectado (tentativa ${attempt}/${maxRetries}). Recarregando dados...`);
                         
-                        // Aguardar um tempo antes de tentar novamente
                         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-                        
-                        // Recarregar dados do GitHub para obter o SHA mais recente
                         await loadAllDataFromGitHub();
                         
-                        // Atualizar os dados locais baseado no tipo
                         switch(dataType) {
                             case 'funcionarios': funcionarios = Array.isArray(data) ? data : funcionarios; break;
                             case 'epis': epis = Array.isArray(data) ? data : epis; break;
@@ -2222,7 +2400,7 @@
                         
                         continue; // Tentar novamente
                     } else {
-                        throw error; // Re-throw se não é 409 ou excedeu tentativas
+                        throw error;
                     }
                 }
             }
@@ -2251,21 +2429,24 @@
                     sha = fileData.sha;
                 }
 
-                // Preparar dados com timestamp de atualização
-                const dataWithTimestamp = {
-                    ...data,
-                    _lastUpdate: new Date().toISOString(),
-                    _updatedBy: currentUser
-                };
+                // CORREÇÃO: Não adicionar metadados para usuários e configurações
+                let dataToSave = data;
+                if (dataType !== 'usuarios' && dataType !== 'configuracoes' && typeof data === 'object' && !Array.isArray(data)) {
+                    dataToSave = {
+                        ...data,
+                        _lastUpdate: new Date().toISOString(),
+                        _updatedBy: currentUser
+                    };
+                }
 
                 // CORREÇÃO: Garantir codificação UTF-8 correta
-                const jsonString = JSON.stringify(dataWithTimestamp, null, 2);
+                const jsonString = JSON.stringify(dataToSave, null, 2);
                 const encoder = new TextEncoder();
                 const uint8Array = encoder.encode(jsonString);
                 const base64Content = btoa(String.fromCharCode(...uint8Array));
                 
                 const body = {
-                    message: `Atualizar ${dataType} - ${new Date().toLocaleString('pt-BR')}`,
+                    message: `${sha ? 'Atualizar' : 'Criar'} ${dataType} - ${new Date().toLocaleString('pt-BR')}`,
                     content: base64Content,
                     branch: GITHUB_CONFIG.branch
                 };
@@ -2289,14 +2470,15 @@
                     throw new Error(`Erro ${response.status}: ${errorData.message}`);
                 }
                 
-                console.log(`✅ ${dataType} salvo no GitHub`);
+                console.log(`✅ ${dataType} ${sha ? 'salvo' : 'criado'} no GitHub`);
                 return await response.json();
 
             } catch (error) {
-                console.error(`Erro ao salvar ${dataType}:`, error);
+                console.error(`Erro ao salvar/criar ${dataType}:`, error);
                 throw error;
             }
         }
+
 
         function loadDefaultEPIs() {
             return [
@@ -2340,18 +2522,21 @@
                 return;
             }
             
-            showLoading('Atualizando dados...');
+            showLoading('Atualizando dados do GitHub...');
             
             try {
+                console.log('🔄 Forçando atualização dos dados...');
                 await loadAllDataFromGitHub();
                 updateAllTables();
                 updateStatistics();
                 updateFilters();
                 hideLoading();
-                showNotification('Dados atualizados!', 'success');
+                showNotification('Dados sincronizados com o GitHub!', 'success');
+                console.log('✅ Sincronização manual concluída');
             } catch (error) {
                 hideLoading();
-                showNotification('Erro ao atualizar dados: ' + error.message, 'error');
+                console.error('Erro ao atualizar dados:', error);
+                showNotification('Erro ao sincronizar: ' + error.message, 'error');
             }
         }
 
@@ -2364,7 +2549,6 @@
                 return;
             }
             
-            // CORREÇÃO: Verificar se funcionarios é array válido
             if (!Array.isArray(funcionarios)) {
                 results.classList.add('hidden');
                 return;
@@ -2414,7 +2598,6 @@
                 return;
             }
             
-            // Verificar se já foi adicionado
             if (sessaoAtual.funcionarios.has(matricula)) {
                 showNotification('Funcionário já adicionado à sessão', 'warning');
                 return;
@@ -2422,21 +2605,19 @@
             
             const funcionario = funcionarios.find(f => f.matricula === matricula);
             
-            // Adicionar à sessão
             sessaoAtual.funcionarios.set(matricula, {
                 dados: funcionario,
                 epis: new Map(),
                 observacao: observacao
             });
             
-            // Limpar formulário
             employeeInput.value = '';
             employeeInput.removeAttribute('data-matricula');
             document.getElementById('observacaoGeral').value = '';
             document.getElementById('employeeResults').classList.add('hidden');
             
-            // Atualizar interface
             updateEmployeeRecords();
+            salvarSessaoLocal(); // ADICIONADO PARA PERSISTÊNCIA
             
             showNotification(`${funcionario.nome} adicionado à sessão!`, 'success');
         }
@@ -2505,7 +2686,7 @@
                                                        style="width: 80px;" class="form-input">
                                             </div>
                                             <div>
-                                                <strong>${epiData.tipoOperacao || 'entrega'}</strong><br>
+                                                <strong>${epiData.tipoOperacao?.replace('_', ' ').toUpperCase() || 'ENTREGA'}</strong><br>
                                                 ${epiData.entregouAntigo ? `<small>EPI antigo: ${epiData.entregouAntigo === 'sim' ? 'Entregue' : 'NÃO entregue'}</small>` : ''}
                                             </div>
                                             <div>
@@ -2548,7 +2729,7 @@
                 epiContainer.classList.toggle('show');
             }
         }
-
+        
         function adicionarEPI(matricula) {
             // CORREÇÃO: Verificar se epis é array válido
             if (!Array.isArray(epis) || epis.length === 0) {
@@ -2556,99 +2737,165 @@
                 return;
             }
             
-            // Criar modal inline para seleção de EPI
+            // Obter funcionário para mostrar no modal
+            const funcionario = funcionarios.find(f => f.matricula === matricula);
+            const nomeFunc = funcionario ? funcionario.nome : matricula;
+            
+            // Criar modal melhorado
             const modal = document.createElement('div');
             modal.className = 'modal show';
             modal.innerHTML = `
-                <div class="modal-content">
+                <div class="modal-content" style="max-width: 700px;">
                     <div class="modal-header">
-                        <h3 class="modal-title">Adicionar EPI</h3>
+                        <h3 class="modal-title">Adicionar EPI - ${nomeFunc}</h3>
                         <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
                     </div>
                     <div class="modal-body">
-                        <div class="form-group">
-                            <label class="form-label">Selecione o EPI:</label>
-                            <select id="selectEPI" class="form-input" style="width: 100%;">
-                                <option value="">Escolha um EPI...</option>
-                                ${epis.map(e => `
-                                    <option value="${e.codigo}">
-                                        ${e.nome} (${e.codigo}) - Estoque: ${estoque[e.codigo]?.quantidade || 0}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Quantidade:</label>
-                            <input type="number" id="quantidadeEPI" class="form-input" value="1" min="1">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Tipo de Operação:</label>
-                            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                                <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="radio" name="tipoOperacao" value="primeira_entrega">
-                                    Primeira Entrega
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="radio" name="tipoOperacao" value="entrega" checked>
-                                    Entrega
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="radio" name="tipoOperacao" value="troca">
-                                    Troca
-                                </label>
+                        <!-- Seção Principal -->
+                        <div class="card" style="margin-bottom: 1rem;">
+                            <div class="card-content">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <strong>Selecione o EPI:</strong>
+                                        </label>
+                                        <select id="selectEPI" class="form-input" onchange="updateEstoqueInfo()" style="width: 100%;">
+                                            <option value="">Escolha um EPI...</option>
+                                            ${epis.map(e => {
+                                                const estoqueAtual = estoque[e.codigo]?.quantidade || 0;
+                                                const statusEstoque = estoqueAtual <= 0 ? '❌ SEM ESTOQUE' : 
+                                                                     estoqueAtual <= (estoque[e.codigo]?.minimo || 10) ? '⚠️ BAIXO' : '✅ OK';
+                                                return `<option value="${e.codigo}" data-estoque="${estoqueAtual}">
+                                                    ${e.nome} (${e.codigo}) - ${statusEstoque}
+                                                </option>`;
+                                            }).join('')}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <strong>Quantidade:</strong>
+                                        </label>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <input type="number" id="quantidadeEPI" class="form-input" value="1" min="1" max="100" style="width: 80px;">
+                                            <span id="estoqueInfo" class="badge badge-secondary">Selecione um EPI</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="form-group" id="devolucaoGroup">
-                            <label class="form-label">Entregou o EPI antigo?</label>
-                            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                                <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="radio" name="entregouAntigo" value="sim">
-                                    Sim
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="radio" name="entregouAntigo" value="nao">
-                                    Não
-                                </label>
+                        <!-- Seção Tipo de Operação -->
+                        <div class="card" style="margin-bottom: 1rem;">
+                            <div class="card-header">
+                                <h4 class="card-title">Tipo de Operação</h4>
+                            </div>
+                            <div class="card-content">
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                    <label class="operacao-option" style="display: flex; flex-direction: column; align-items: center; padding: 1rem; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="radio" name="tipoOperacao" value="primeira_entrega" style="margin-bottom: 0.5rem;">
+                                        <span style="font-size: 2rem;">🆕</span>
+                                        <strong>Primeira Entrega</strong>
+                                        <small style="color: var(--gray-600); text-align: center;">Para funcionários novos</small>
+                                    </label>
+                                    
+                                    <label class="operacao-option" style="display: flex; flex-direction: column; align-items: center; padding: 1rem; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="radio" name="tipoOperacao" value="entrega" checked style="margin-bottom: 0.5rem;">
+                                        <span style="font-size: 2rem;">📦</span>
+                                        <strong>Entrega</strong>
+                                        <small style="color: var(--gray-600); text-align: center;">Entrega comum</small>
+                                    </label>
+                                    
+                                    <label class="operacao-option" style="display: flex; flex-direction: column; align-items: center; padding: 1rem; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="radio" name="tipoOperacao" value="troca" style="margin-bottom: 0.5rem;">
+                                        <span style="font-size: 2rem;">🔄</span>
+                                        <strong>Troca</strong>
+                                        <small style="color: var(--gray-600); text-align: center;">Substituição de EPI</small>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="form-group hidden" id="justificativaGroup">
-                            <label class="form-label">Justificativa para não devolução:</label>
-                            <textarea id="justificativa" class="form-input" rows="3" 
-                                      placeholder="Descreva o motivo da não devolução..."></textarea>
+                        <!-- Seção Devolução (oculta inicialmente) -->
+                        <div class="card hidden" id="devolucaoCard" style="margin-bottom: 1rem;">
+                            <div class="card-header">
+                                <h4 class="card-title">Devolução do EPI Anterior</h4>
+                            </div>
+                            <div class="card-content">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 1rem; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer;">
+                                        <input type="radio" name="entregouAntigo" value="sim">
+                                        <span>✅ <strong>Sim, devolveu</strong></span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 1rem; border: 2px solid var(--gray-200); border-radius: 8px; cursor: pointer;">
+                                        <input type="radio" name="entregouAntigo" value="nao">
+                                        <span>❌ <strong>Não devolveu</strong></span>
+                                    </label>
+                                </div>
+                                
+                                <div class="form-group hidden" id="justificativaGroup">
+                                    <label class="form-label">
+                                        <strong>Justificativa para não devolução:</strong>
+                                    </label>
+                                    <textarea id="justificativa" class="form-input" rows="3" 
+                                              placeholder="Descreva o motivo da não devolução (obrigatório)..."></textarea>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label class="form-label">Observações:</label>
-                            <input type="text" id="observacaoEPI" class="form-input" 
-                                   placeholder="Observações adicionais...">
+                        <!-- Seção Observações -->
+                        <div class="card">
+                            <div class="card-content">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <strong>Observações:</strong>
+                                    </label>
+                                    <input type="text" id="observacaoEPI" class="form-input" 
+                                           placeholder="Observações adicionais (opcional)...">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancelar</button>
-                        <button class="btn btn-success" onclick="confirmarAdicaoEPI('${matricula}')">Adicionar</button>
+                        <button class="btn btn-success" onclick="confirmarAdicaoEPI('${matricula}')" id="btnConfirmarEPI">
+                            Adicionar EPI
+                        </button>
                     </div>
                 </div>
+                
+                <style>
+                    .operacao-option:hover {
+                        border-color: var(--primary-color) !important;
+                        background: var(--gray-50);
+                    }
+                    
+                    .operacao-option input:checked {
+                        accent-color: var(--primary-color);
+                    }
+                    
+                    .operacao-option:has(input:checked) {
+                        border-color: var(--primary-color) !important;
+                        background: rgba(37, 99, 235, 0.1);
+                    }
+                </style>
             `;
             
             document.body.appendChild(modal);
             
-            // Event listeners para mostrar/ocultar campos
+            // Event listeners para interatividade
             const radios = modal.querySelectorAll('input[name="tipoOperacao"]');
-            const devolucaoGroup = modal.querySelector('#devolucaoGroup');
+            const devolucaoCard = modal.querySelector('#devolucaoCard');
             const justificativaGroup = modal.querySelector('#justificativaGroup');
             const radiosEntregou = modal.querySelectorAll('input[name="entregouAntigo"]');
             
             radios.forEach(radio => {
                 radio.addEventListener('change', () => {
                     if (radio.value === 'primeira_entrega') {
-                        devolucaoGroup.classList.add('hidden');
+                        devolucaoCard.classList.add('hidden');
                         justificativaGroup.classList.add('hidden');
                     } else {
-                        devolucaoGroup.classList.remove('hidden');
+                        devolucaoCard.classList.remove('hidden');
                     }
                 });
             });
@@ -2662,6 +2909,44 @@
                     }
                 });
             });
+            
+            // Função para atualizar info do estoque
+            window.updateEstoqueInfo = function() {
+                const select = document.getElementById('selectEPI');
+                const estoqueInfo = document.getElementById('estoqueInfo');
+                const quantidadeInput = document.getElementById('quantidadeEPI');
+                const btnConfirmar = document.getElementById('btnConfirmarEPI');
+                
+                if (select.value) {
+                    const estoqueAtual = parseInt(select.selectedOptions[0].dataset.estoque) || 0;
+                    const quantidade = parseInt(quantidadeInput.value) || 1;
+                    
+                    if (estoqueAtual <= 0) {
+                        estoqueInfo.textContent = `❌ SEM ESTOQUE`;
+                        estoqueInfo.className = 'badge badge-danger';
+                        btnConfirmar.disabled = true;
+                        btnConfirmar.textContent = 'SEM ESTOQUE';
+                    } else if (quantidade > estoqueAtual) {
+                        estoqueInfo.textContent = `⚠️ Estoque: ${estoqueAtual} (Insuficiente)`;
+                        estoqueInfo.className = 'badge badge-warning';
+                        btnConfirmar.disabled = true;
+                        btnConfirmar.textContent = 'QUANTIDADE INSUFICIENTE';
+                    } else {
+                        estoqueInfo.textContent = `✅ Estoque: ${estoqueAtual}`;
+                        estoqueInfo.className = 'badge badge-success';
+                        btnConfirmar.disabled = false;
+                        btnConfirmar.textContent = 'Adicionar EPI';
+                    }
+                } else {
+                    estoqueInfo.textContent = 'Selecione um EPI';
+                    estoqueInfo.className = 'badge badge-secondary';
+                    btnConfirmar.disabled = true;
+                    btnConfirmar.textContent = 'Selecione um EPI';
+                }
+            };
+            
+            // Event listener para quantidade
+            modal.querySelector('#quantidadeEPI').addEventListener('input', updateEstoqueInfo);
         }
 
         function confirmarAdicaoEPI(matricula) {
@@ -2697,13 +2982,11 @@
             const funcData = sessaoAtual.funcionarios.get(matricula);
             if (!funcData) return;
             
-            // Verificar se EPI já foi adicionado
             if (funcData.epis.has(epiCodigo)) {
                 showNotification('EPI já adicionado para este funcionário!', 'warning');
                 return;
             }
             
-            // Adicionar EPI com nova estrutura
             let observacaoCompleta = observacao;
             if (tipoOperacao !== 'primeira_entrega') {
                 observacaoCompleta += (observacaoCompleta ? ' | ' : '') + 
@@ -2723,6 +3006,7 @@
             });
             
             updateEmployeeRecords();
+            salvarSessaoLocal(); // ADICIONADO PARA PERSISTÊNCIA
             modal.remove();
             showNotification(`${epi.nome} adicionado!`, 'success');
         }
@@ -2732,10 +3016,16 @@
                 const funcData = sessaoAtual.funcionarios.get(matricula);
                 if (funcData && funcData.epis.has(epiCodigo)) {
                     funcData.epis.delete(epiCodigo);
+                    
+                    // Salvar sessão e atualizar interface
+                    salvarSessaoLocal();
                     updateEmployeeRecords();
-                    showNotification('EPI removido!', 'info');
+                    
+                    // Encontrar o EPI para mostrar nome na notificação
+                    const epi = epis.find(e => e.codigo === epiCodigo);
+                    showNotification(`${epi ? epi.nome : epiCodigo} removido com sucesso!`, 'success');
                 } else {
-                    showNotification('EPI não encontrado!', 'error');
+                    showNotification('EPI não encontrado na sessão!', 'error');
                 }
             }
         }
@@ -2780,11 +3070,12 @@
             showLoading('Finalizando sessão...');
             
             try {
+                await loadAllDataFromGitHub();
+
                 const sessionId = `DIST${Date.now()}`;
                 const itensProcessados = [];
                 let totalEntregas = 0, totalDevolucoes = 0, totalTrocas = 0, totalPrimeiras = 0;
                 
-                // Processar todos os itens da sessão
                 sessaoAtual.funcionarios.forEach((funcData, matricula) => {
                     funcData.epis.forEach((epiData, epiCodigo) => {
                         const item = {
@@ -2803,7 +3094,6 @@
                         };
                         itensProcessados.push(item);
                         
-                        // Contar tipos de operação
                         switch(epiData.tipoOperacao) {
                             case 'primeira_entrega': totalPrimeiras += epiData.quantidade; break;
                             case 'entrega': totalEntregas += epiData.quantidade; break;
@@ -2811,7 +3101,6 @@
                             case 'devolucao': totalDevolucoes += epiData.quantidade; break;
                         }
                         
-                        // Atualizar estoque
                         if (estoque[epiCodigo]) {
                             if (['entrega', 'primeira_entrega', 'troca'].includes(epiData.tipoOperacao)) {
                                 estoque[epiCodigo].quantidade = Math.max(0, estoque[epiCodigo].quantidade - epiData.quantidade);
@@ -2822,7 +3111,6 @@
                             estoque[epiCodigo].ultimaMovimentacao = new Date().toISOString();
                         }
                         
-                        // Adicionar ao histórico
                         historico.unshift({
                             funcionario: matricula,
                             epi: epiCodigo,
@@ -2838,7 +3126,6 @@
                     });
                 });
                 
-                // Criar registro da distribuição
                 const distribuicao = {
                     id: sessionId, data, hora, responsavel,
                     funcionarios: Array.from(sessaoAtual.funcionarios.keys()),
@@ -2849,17 +3136,16 @@
                 
                 distribuicoes.unshift(distribuicao);
                 
-                // CORREÇÃO: Salvar tudo no GitHub com retry
                 await Promise.all([
                     saveDataToGitHubWithRetry('estoque', estoque),
                     saveDataToGitHubWithRetry('historico', historico),
                     saveDataToGitHubWithRetry('distribuicoes', distribuicoes)
                 ]);
+
+                await loadAllDataFromGitHub();
                 
-                // Limpar sessão
                 limparSessao();
                 
-                // Atualizar interface
                 updateAllTables();
                 updateStatistics();
                 
@@ -2882,6 +3168,7 @@
             inicializarDataHora();
             updateEmployeeRecords();
             document.getElementById('responsavelOperacao').value = '';
+            limparSessaoLocal(); // ADICIONADO PARA PERSISTÊNCIA
         }
 
         function gerarRelatorioWhatsApp() {
@@ -2989,14 +3276,17 @@
             
             const isEdit = document.getElementById('matriculaFunc').disabled;
             
-            if (!isEdit && funcionarios.find(f => f.matricula === matricula)) {
-                showNotification('Matrícula já cadastrada!', 'error');
-                return;
-            }
-            
             showLoading('Salvando funcionário...');
             
             try {
+                await loadAllDataFromGitHub();
+                
+                if (!isEdit && funcionarios.find(f => f.matricula === matricula)) {
+                    hideLoading();
+                    showNotification('Matrícula já cadastrada!', 'error');
+                    return;
+                }
+                
                 const funcionarioData = { 
                     matricula, nome, funcao, escala, equipamento, supervisor, status, 
                     dataCadastro: isEdit ? funcionarios.find(f => f.matricula === matricula)?.dataCadastro : new Date().toISOString(),
@@ -3012,8 +3302,11 @@
                 
                 await saveDataToGitHubWithRetry('funcionarios', funcionarios);
                 
+                await loadAllDataFromGitHub();
+                
                 updateAllTables();
                 updateFilters();
+                updateStatistics();
                 closeModal('modalFuncionario');
                 hideLoading();
                 showNotification(`Funcionário ${isEdit ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
@@ -3030,11 +3323,16 @@
                 showLoading('Removendo funcionário...');
                 
                 try {
+                    await loadAllDataFromGitHub();
+                    
                     funcionarios = funcionarios.filter(f => f.matricula !== matricula);
                     await saveDataToGitHubWithRetry('funcionarios', funcionarios);
                     
+                    await loadAllDataFromGitHub();
+                    
                     updateAllTables();
                     updateFilters();
+                    updateStatistics();
                     hideLoading();
                     showNotification('Funcionário removido!', 'info');
                     
@@ -3162,14 +3460,17 @@
             
             const isEdit = document.getElementById('codigoEPI').disabled;
             
-            if (!isEdit && epis.find(e => e.codigo === codigo)) { 
-                showNotification('Código de EPI já cadastrado!', 'error'); 
-                return; 
-            }
-            
             showLoading('Salvando EPI...');
             
             try {
+                await loadAllDataFromGitHub();
+
+                if (!isEdit && epis.find(e => e.codigo === codigo)) { 
+                    hideLoading();
+                    showNotification('Código de EPI já cadastrado!', 'error'); 
+                    return; 
+                }
+
                 const epiData = { codigo, nome, categoria, ca, validadeCA, vidaUtil };
                 
                 if (isEdit) {
@@ -3177,15 +3478,15 @@
                     if (index !== -1) { epis[index] = { ...epis[index], ...epiData }; }
                 } else {
                     epis.push(epiData);
-                    // Criar entrada no estoque
                     if (!estoque[codigo]) {
                         estoque[codigo] = { quantidade: 0, minimo: 10, ultimaMovimentacao: new Date().toISOString() };
                     }
                 }
                 
-                // CORREÇÃO: Salvar sequencialmente para evitar conflitos
                 await saveDataToGitHubWithRetry('epis', epis);
                 await saveDataToGitHubWithRetry('estoque', estoque);
+
+                await loadAllDataFromGitHub();
                 
                 updateAllTables();
                 updateFilters();
@@ -3284,7 +3585,6 @@
                 updateStatistics();
                 closeModal('modalAjusteEstoque');
                 
-                // Limpar formulário
                 document.getElementById('epiAjuste').value = '';
                 document.getElementById('quantidadeAjuste').value = '';
                 document.getElementById('motivoAjuste').value = '';
@@ -3313,9 +3613,61 @@
             
             showNotification('Token do GitHub salvo com sucesso!', 'success');
             
+            // Exibe o botão de inicialização após salvar o token
+            document.getElementById('btnInitializeSystem').classList.remove('hidden');
+
             setTimeout(() => {
                 testarConexaoGitHub();
             }, 500);
+        }
+
+        // NOVA FUNÇÃO: Para criar os arquivos no GitHub
+        async function initializeSystemFiles() {
+            if (!GITHUB_CONFIG.token) {
+                showNotification('Por favor, insira e salve o token do GitHub primeiro.', 'error');
+                return;
+            }
+            if (!confirm('Isso criará a estrutura de arquivos no repositório. Continuar?')) {
+                return;
+            }
+
+            showLoading('Inicializando arquivos no GitHub...');
+
+            try {
+                const initialData = {
+                    funcionarios: [],
+                    epis: loadDefaultEPIs(),
+                    estoque: {},
+                    historico: [],
+                    distribuicoes: [],
+                    usuarios: {},
+                    configuracoes: {
+                        nomeEmpresa: 'GrupoGPS',
+                        autoRefreshInterval: 30,
+                        autoSync: true
+                    }
+                };
+
+                // Garante que o estoque seja inicializado para os EPIs padrão
+                initialData.epis.forEach(epi => {
+                    initialData.estoque[epi.codigo] = { quantidade: 0, minimo: 10, ultimaMovimentacao: new Date().toISOString() };
+                });
+
+                await Promise.all(
+                    Object.keys(GITHUB_CONFIG.paths).map(key => 
+                        saveDataToGitHub(key, initialData[key])
+                    )
+                );
+
+                hideLoading();
+                showNotification('Sistema inicializado com sucesso! Por favor, recarregue a página.', 'success');
+                setTimeout(() => location.reload(), 3000);
+
+            } catch (error) {
+                hideLoading();
+                console.error('Erro ao inicializar o sistema:', error);
+                showNotification('Erro ao inicializar: ' + error.message, 'error');
+            }
         }
 
         function testarConexaoGitHub() {
@@ -3373,7 +3725,6 @@
                 await saveDataToGitHubWithRetry('configuracoes', configuracoes);
                 showNotification('Configurações salvas!', 'success');
                 
-                // Reiniciar timer de atualização
                 startAutoRefresh();
                 
             } catch (error) {
@@ -3383,8 +3734,8 @@
         }
 
         function resetarSistema() {
-            if (confirm('ATENÇÃO: Isso irá apagar todos os dados do sistema. Tem certeza?')) {
-                if (confirm('Esta ação não pode ser desfeita. Confirma o reset completo?')) {
+            if (confirm('ATENÇÃO: Isso irá apagar os dados locais do navegador (token salvo). Não apaga os dados no GitHub. Tem certeza?')) {
+                if (confirm('Confirma a limpeza do cache local?')) {
                     localStorage.clear();
                     if (autoRefreshTimer) {
                         clearInterval(autoRefreshTimer);
@@ -3511,10 +3862,12 @@
             showLoading('Importando funcionários...');
             
             try {
+                await loadAllDataFromGitHub();
+
                 let importados = 0, erros = 0;
                 
                 window.csvImportData.forEach(row => {
-                    const matricula = row.Matricula || row.matricula || '';
+                    const matricula = String(row.Matricula || row.matricula || '');
                     const nome = row.Nome || row.nome || '';
                     if (matricula && nome && !funcionarios.find(f => f.matricula === matricula)) {
                         funcionarios.push({
@@ -3531,6 +3884,8 @@
                 });
                 
                 await saveDataToGitHubWithRetry('funcionarios', funcionarios);
+
+                await loadAllDataFromGitHub();
                 
                 updateAllTables();
                 updateFilters();
@@ -3557,7 +3912,6 @@
 
         function updateTabelaFuncionarios() {
             const tbody = document.getElementById('funcionariosTableBody');
-            // CORREÇÃO: Verificar se funcionarios é array válido
             if (!Array.isArray(funcionarios) || funcionarios.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--gray-500);">Nenhum funcionário cadastrado</td></tr>`;
                 return;
@@ -3688,15 +4042,23 @@
             document.getElementById('episVencidos').textContent = vencidos;
             document.getElementById('categorias').textContent = cats;
             
-            let totalEstoque = 0, itensCriticos = 0;
+            // CORREÇÃO: Garantir que sempre temos números válidos
+            let totalEstoque = 0, itensCriticos = 0, valorEstoque = 0;
             if (estoque && typeof estoque === 'object') {
                 Object.values(estoque).forEach(dados => {
-                    totalEstoque += dados.quantidade;
-                    if (dados.quantidade <= dados.minimo) itensCriticos++;
+                    // CORREÇÃO: Garantir que quantidade é número válido
+                    const quantidade = Number(dados.quantidade) || 0;
+                    const minimo = Number(dados.minimo) || 0;
+                    
+                    totalEstoque += quantidade;
+                    if (quantidade <= minimo) itensCriticos++;
                 });
             }
+            
+            // CORREÇÃO: Sempre exibir números válidos
             document.getElementById('totalEstoque').textContent = totalEstoque;
             document.getElementById('itensCriticos').textContent = itensCriticos;
+            document.getElementById('valorEstoque').textContent = `R$ ${valorEstoque.toFixed(2)}`;
             
             const hoje = new Date().toISOString().split('T')[0];
             let entregasHoje = 0, devolucoesHoje = 0, trocasHoje = 0, consumoMensal = 0;
@@ -3704,14 +4066,16 @@
             
             if (Array.isArray(historico)) {
                 historico.forEach(item => {
+                    const quantidade = Number(item.quantidade) || 0; // CORREÇÃO: Garantir número válido
+                    
                     if (item.data === hoje) {
-                        if (item.acao === 'entrega') entregasHoje += item.quantidade;
-                        if (item.acao === 'devolucao') devolucoesHoje += item.quantidade;
-                        if (item.acao === 'troca') trocasHoje += item.quantidade;
+                        if (item.acao === 'entrega') entregasHoje += quantidade;
+                        if (item.acao === 'devolucao') devolucoesHoje += quantidade;
+                        if (item.acao === 'troca') trocasHoje += quantidade;
                     }
                     const dataItem = new Date(item.data);
                     if (dataItem.getMonth() === mesAtual && dataItem.getFullYear() === anoAtual && item.acao === 'entrega') {
-                        consumoMensal += item.quantidade;
+                        consumoMensal += quantidade;
                     }
                 });
             }
@@ -3959,7 +4323,7 @@
         function gerarRelatorioPDF() { showNotification('Funcionalidade PDF em desenvolvimento', 'info'); }
 
         // FUNÇÕES DE INTERFACE
-        function switchTab(tabName) {
+        async function switchTab(tabName) {
             const tab = document.querySelector(`[onclick="switchTab('${tabName}')"]`);
             if (tab && tab.classList.contains('disabled')) {
                 showNotification('Acesso restrito para seu nível de usuário', 'warning');
@@ -3970,6 +4334,19 @@
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.querySelector(`[onclick="switchTab('${tabName}')"]`)?.classList.add('active');
             document.getElementById(tabName + '-tab')?.classList.add('active');
+            
+            if (GITHUB_CONFIG.token && isOnline) {
+                try {
+                    console.log(`🔄 Recarregando dados ao acessar aba: ${tabName}`);
+                    await loadAllDataFromGitHub();
+                    updateAllTables();
+                    updateStatistics();
+                    updateFilters();
+                    console.log(`✅ Dados atualizados para aba: ${tabName}`);
+                } catch (error) {
+                    console.error('Erro ao recarregar dados na mudança de aba:', error);
+                }
+            }
         }
 
         function closeModal(modalId) { 
@@ -4029,15 +4406,9 @@
             return data.toLocaleString('pt-BR', { hour12: false });
         }
 
-        console.log('🚀 Sistema de Controle de EPIs - GrupoGPS v4.1 CORRIGIDO');
+        console.log('🚀 Sistema de Controle de EPIs - GrupoGPS v4.2 CORRIGIDO');
         console.log('📡 GitHub como única fonte de dados');
-        console.log('🔧 Correções aplicadas:');
-        console.log('   ✅ Conflitos GitHub 409 - Sistema de retry implementado');
-        console.log('   ✅ Codificação UTF-8 - TextEncoder/TextDecoder implementados');
-        console.log('   ✅ Validação de arrays - Verificações de tipo implementadas');
-        console.log('   ✅ Salvamento sequencial - Evita conflitos paralelos');
-        console.log('   ✅ Tratamento de erros - Melhor feedback ao usuário');
-        console.log('⚡ Sistema estável e pronto para produção!');
+        console.log('🔧 Correções aplicadas: Modo Setup, Inicialização de Arquivos, Sincronização Robusta');
     </script>
 </body>
 </html>
