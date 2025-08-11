@@ -1,5 +1,50 @@
 [
   {
+    "id": "DIST1754923662911",
+    "data": "2025-08-11",
+    "hora": "11:45",
+    "responsavel": "Brunno",
+    "funcionarios": [
+      "82158808",
+      "12345"
+    ],
+    "totalEntregas": 0,
+    "totalDevolucoes": 0,
+    "totalTrocas": 2,
+    "totalPrimeiras": 0,
+    "itensDetalhados": [
+      {
+        "funcionario": "82158808",
+        "epi": "EPI002",
+        "quantidade": 1,
+        "observacao": "Entregou EPI antigo: SIM",
+        "acao": "troca",
+        "tipoOperacao": "troca",
+        "entregouAntigo": "sim",
+        "justificativa": "",
+        "data": "2025-08-11",
+        "hora": "11:45",
+        "responsavel": "Brunno",
+        "timestamp": "2025-08-11T14:47:42.912Z"
+      },
+      {
+        "funcionario": "82158808",
+        "epi": "EPI001",
+        "quantidade": 1,
+        "observacao": "Entregou EPI antigo: SIM",
+        "acao": "troca",
+        "tipoOperacao": "troca",
+        "entregouAntigo": "sim",
+        "justificativa": "",
+        "data": "2025-08-11",
+        "hora": "11:45",
+        "responsavel": "Brunno",
+        "timestamp": "2025-08-11T14:47:42.912Z"
+      }
+    ],
+    "timestamp": "2025-08-11T14:47:42.913Z"
+  },
+  {
     "id": "DIST1754907864122",
     "data": "2025-08-11",
     "hora": "07:23",
