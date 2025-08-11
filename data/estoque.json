@@ -1,13 +1,13 @@
 {
   "EPI001": {
-    "quantidade": 9,
+    "quantidade": 8,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-11T10:24:24.124Z"
+    "ultimaMovimentacao": "2025-08-11T14:47:42.912Z"
   },
   "EPI002": {
-    "quantidade": 10,
+    "quantidade": 9,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-11T01:28:00.256Z"
+    "ultimaMovimentacao": "2025-08-11T14:47:42.912Z"
   },
   "EPI003": {
     "quantidade": 0,
@@ -39,6 +39,6 @@
     "minimo": 10,
     "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
   },
-  "_lastUpdate": "2025-08-11T10:24:29.494Z",
-  "_updatedBy": "warlison"
+  "_lastUpdate": "2025-08-11T14:47:42.922Z",
+  "_updatedBy": "admin"
 }
