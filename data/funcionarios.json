@@ -9,5 +9,16 @@
     "status": "Ativo",
     "dataCadastro": "2025-08-11T01:19:16.163Z",
     "dataUltimaEdicao": "2025-08-11T01:19:16.163Z"
+  },
+  {
+    "matricula": "12345",
+    "nome": "Evaldo Souza Abreu",
+    "funcao": "Operador",
+    "escala": "16HS",
+    "equipamento": "Auto Vácuo",
+    "supervisor": "",
+    "status": "Ativo",
+    "dataCadastro": "2025-08-11T02:32:25.488Z",
+    "dataUltimaEdicao": "2025-08-11T02:32:25.488Z"
   }
 ]
