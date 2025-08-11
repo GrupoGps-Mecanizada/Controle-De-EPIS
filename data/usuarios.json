@@ -6,5 +6,13 @@
     "active": true,
     "createdAt": "2025-08-11T01:22:21.955Z",
     "lastAccess": "2025-08-11T02:40:05.726Z"
+  },
+  "bruno": {
+    "name": "Bruno Leles",
+    "password": "123456ab",
+    "level": "almoxarife",
+    "active": true,
+    "createdAt": "2025-08-11T02:40:51.071Z",
+    "lastAccess": null
   }
 }
