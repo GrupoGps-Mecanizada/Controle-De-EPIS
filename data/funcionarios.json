@@ -4,22 +4,12 @@
     "nome": "Warlison Cristian Santos Abreu",
     "funcao": "Motorista",
     "escala": "ADM",
-    "equipamento": "Auto VÃÂ¡cuo",
-    "supervisor": "SebastiÃÂ£o Ribeiro",
-    "status": "Ativo",
-    "dataCadastro": "2025-08-10T21:23:14.789Z"
-  },
-  "1": {
-    "matricula": "123",
-    "nome": "Warlison Abreu",
-    "funcao": "Operador",
-    "escala": "ADM",
     "equipamento": "Alta Pressão",
-    "supervisor": "Ozias",
+    "supervisor": "Sebastião Ribeiro",
     "status": "Ativo",
-    "dataCadastro": "2025-08-10T23:53:06.248Z",
-    "dataUltimaEdicao": "2025-08-10T23:53:06.248Z"
+    "dataCadastro": "2025-08-11T00:13:55.842Z",
+    "dataUltimaEdicao": "2025-08-11T00:13:55.842Z"
   },
-  "_lastUpdate": "2025-08-10T23:53:06.619Z",
+  "_lastUpdate": "2025-08-11T00:13:55.998Z",
   "_updatedBy": "admin"
 }
