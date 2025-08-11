@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "funcionario": "82158808",
+    "epi": "EPI001",
+    "quantidade": 1,
+    "observacao": "Entregou EPI antigo: SIM",
+    "acao": "entrega",
+    "sessao": "DIST1754907864122",
+    "data": "2025-08-11",
+    "hora": "07:23",
+    "responsavel": "Bruno",
+    "timestamp": "2025-08-11T10:24:24.124Z"
+  }
+]
