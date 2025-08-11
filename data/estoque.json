@@ -2,58 +2,51 @@
   "EPI001": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI002": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI003": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI004": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI005": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI006": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI007": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI008": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI009": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
   },
   "EPI010": {
     "quantidade": 50,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T21:21:24.887Z"
-  },
-  "EPI-001": {
-    "quantidade": 0,
-    "minimo": 10,
-    "ultimaMovimentacao": "2025-08-10T23:20:21.889Z"
-  },
-  "_lastUpdate": "2025-08-10T23:52:24.066Z",
-  "_updatedBy": "admin"
+    "ultimaMovimentacao": "2025-08-11T00:17:44.296Z"
+  }
 }
