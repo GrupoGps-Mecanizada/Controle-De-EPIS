@@ -1,5 +1,4 @@
 {
-  "_updatedBy": "admin",
   "warlison": {
     "name": "Warlison Abreu",
     "password": "Abreuzin",
@@ -8,5 +7,6 @@
     "createdAt": "2025-08-11T01:22:21.955Z",
     "lastAccess": null
   },
-  "_lastUpdate": "2025-08-11T01:24:36.380Z"
+  "_lastUpdate": "2025-08-11T01:24:39.128Z",
+  "_updatedBy": "admin"
 }
