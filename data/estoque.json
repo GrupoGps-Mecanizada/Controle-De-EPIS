@@ -1,8 +1,8 @@
 {
   "EPI001": {
-    "quantidade": 10,
+    "quantidade": 9,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-11T01:40:20.377Z"
+    "ultimaMovimentacao": "2025-08-11T10:24:24.124Z"
   },
   "EPI002": {
     "quantidade": 10,
@@ -39,6 +39,6 @@
     "minimo": 10,
     "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
   },
-  "_lastUpdate": "2025-08-11T02:27:49.393Z",
-  "_updatedBy": "admin"
+  "_lastUpdate": "2025-08-11T10:24:29.494Z",
+  "_updatedBy": "warlison"
 }
