@@ -1,12 +1,12 @@
 {
   "warlison": {
-    "name": "Warlison Abreu",
+    "name": "warlison",
     "password": "wwwwwwww",
     "level": "admin",
     "active": true,
     "createdAt": "2025-08-11T01:22:21.955Z",
     "lastAccess": null
   },
-  "_lastUpdate": "2025-08-11T01:24:48.822Z",
+  "_lastUpdate": "2025-08-11T01:25:00.128Z",
   "_updatedBy": "admin"
 }
