@@ -62,13 +62,5 @@
     "ca": "89012",
     "validadeCA": "2026-12-31",
     "vidaUtil": 90
-  },
-  {
-    "codigo": "EPI009",
-    "nome": "Respirador PFF2",
-    "categoria": "Proteção Respiratória",
-    "ca": "90123",
-    "validadeCA": "2026-12-31",
-    "vidaUtil": 1
   }
 ]
