@@ -17,7 +17,7 @@
   "EPI004": {
     "quantidade": 0,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
+    "ultimaMovimentacao": "2025-08-11T01:40:46.267Z"
   },
   "EPI005": {
     "quantidade": 0,
@@ -39,6 +39,6 @@
     "minimo": 10,
     "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
   },
-  "_lastUpdate": "2025-08-11T01:40:20.540Z",
+  "_lastUpdate": "2025-08-11T01:40:52.114Z",
   "_updatedBy": "admin"
 }
