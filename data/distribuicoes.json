@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "id": "DIST1754907864122",
+    "data": "2025-08-11",
+    "hora": "07:23",
+    "responsavel": "Bruno",
+    "funcionarios": [
+      "82158808",
+      "12345"
+    ],
+    "totalEntregas": 1,
+    "totalDevolucoes": 0,
+    "totalTrocas": 0,
+    "totalPrimeiras": 0,
+    "itensDetalhados": [
+      {
+        "funcionario": "82158808",
+        "epi": "EPI001",
+        "quantidade": 1,
+        "observacao": "Entregou EPI antigo: SIM",
+        "acao": "entrega",
+        "tipoOperacao": "entrega",
+        "entregouAntigo": "sim",
+        "justificativa": "v'",
+        "data": "2025-08-11",
+        "hora": "07:23",
+        "responsavel": "Bruno",
+        "timestamp": "2025-08-11T10:24:24.124Z"
+      }
+    ],
+    "timestamp": "2025-08-11T10:24:24.126Z"
+  }
+]
