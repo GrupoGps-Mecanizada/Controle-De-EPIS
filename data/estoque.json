@@ -5,9 +5,9 @@
     "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
   },
   "EPI002": {
-    "quantidade": 0,
+    "quantidade": 10,
     "minimo": 10,
-    "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
+    "ultimaMovimentacao": "2025-08-11T01:28:00.256Z"
   },
   "EPI003": {
     "quantidade": 0,
@@ -49,6 +49,6 @@
     "minimo": 10,
     "ultimaMovimentacao": "2025-08-11T01:16:31.025Z"
   },
-  "_lastUpdate": "2025-08-11T01:19:49.582Z",
+  "_lastUpdate": "2025-08-11T01:28:02.698Z",
   "_updatedBy": "admin"
 }
