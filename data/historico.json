@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "funcionario": "SISTEMA",
+    "epi": "EPI002",
+    "quantidade": 10,
+    "observacao": "ENTRADA: Pedido Mensal (Anterior: 0)",
+    "acao": "ajuste_estoque",
+    "sessao": "AJUSTE1754875680257",
+    "data": "2025-08-11",
+    "hora": "22:28",
+    "responsavel": "admin",
+    "timestamp": "2025-08-11T01:28:00.257Z"
+  }
+]
