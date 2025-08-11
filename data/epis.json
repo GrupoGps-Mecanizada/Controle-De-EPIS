@@ -70,13 +70,5 @@
     "ca": "90123",
     "validadeCA": "2026-12-31",
     "vidaUtil": 1
-  },
-  {
-    "codigo": "EPI010",
-    "nome": "Cinto de Segurança",
-    "categoria": "Proteção Contra Quedas",
-    "ca": "01234",
-    "validadeCA": "2026-12-31",
-    "vidaUtil": 365
   }
 ]
