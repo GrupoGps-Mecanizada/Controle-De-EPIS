@@ -1,4 +1,12 @@
 {
-  "_lastUpdate": "2025-08-11T01:18:48.000Z",
-  "_updatedBy": "admin"
+  "_lastUpdate": "2025-08-11T01:22:22.114Z",
+  "_updatedBy": "admin",
+  "warlison": {
+    "name": "Warlison Abreu",
+    "password": "Abreuzin",
+    "level": "admin",
+    "active": true,
+    "createdAt": "2025-08-11T01:22:21.955Z",
+    "lastAccess": null
+  }
 }
