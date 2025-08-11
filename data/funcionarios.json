@@ -20,5 +20,16 @@
     "status": "Ativo",
     "dataCadastro": "2025-08-11T02:32:25.488Z",
     "dataUltimaEdicao": "2025-08-11T02:32:25.488Z"
+  },
+  {
+    "matricula": "82141926",
+    "nome": "Robert Smith ",
+    "funcao": "Operador",
+    "escala": "ADM",
+    "equipamento": "Aspirador De Pó",
+    "supervisor": "Jenessi",
+    "status": "Ativo",
+    "dataCadastro": "2025-08-11T13:20:47.992Z",
+    "dataUltimaEdicao": "2025-08-11T13:20:47.992Z"
   }
 ]
